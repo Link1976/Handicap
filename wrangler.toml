@@ -1,0 +1,9 @@
+name = "golf-handicap"
+main = "worker-static.js"
+compatibility_date = "2024-01-01"
+account_id = "2f76ec85070e67606a8679a5d99164fe"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = false

@@ -69,8 +69,10 @@ function getBestIndices(rounds) {
   );
 }
 
-function simulateNextRound(rounds, gross, cr, slope, asc) {
-  const newDiff = Math.round(((gross - cr - (asc || 0)) * 113 / slope) * 10) / 10;
+function simulateNextRound(rounds, gross, cr, slope, asc, overrideDiff) {
+  const newDiff = overrideDiff !== undefined
+    ? overrideDiff
+    : Math.round(((gross - cr - (asc || 0)) * 113 / slope) * 10) / 10;
   const simRounds = [...rounds.slice(-19), { differential: newDiff }];
   const newHI = calcHandicapIndex(simRounds);
   const window20 = simRounds.slice(-20);
@@ -81,7 +83,7 @@ function simulateNextRound(rounds, gross, cr, slope, asc) {
   return { newHandicap: newHI, differential: newDiff, computes: newComputes };
 }
 var getTC=getTakeCount,calcHI=calcHandicapIndex,getBest=getBestIndices;
-function simRound(rds,g,cr,sl,asc){var r=simulateNextRound(rds,g,cr,sl,asc);return{nh:r.newHandicap,df:r.differential,cp:r.computes}}
+function simRound(rds,g,cr,sl,asc,overrideDiff){var r=simulateNextRound(rds,g,cr,sl,asc,overrideDiff);return{nh:r.newHandicap,df:r.differential,cp:r.computes}}
 
 
 
@@ -554,19 +556,64 @@ function PlayingHCP(p){
 function Simulator(p){
   var _cr=useState(""),cr=_cr[0],sCr=_cr[1],_sl=useState(""),sl=_sl[0],sSl=_sl[1],_asc=useState("0"),asc=_asc[0],sAsc=_asc[1],_mn=useState(70),mn=_mn[0],sMn=_mn[1],_mx=useState(105),mx=_mx[0],sMx=_mx[1],_r=useState([]),res=_r[0],sRes=_r[1];
   var _sel=useState(""),sel=_sel[0],sSel=_sel[1];
+  var _nine=useState(false),nine=_nine[0],sNine=_nine[1];
+  var onNineToggle=function(){var n=!nine;sNine(n);if(n){sMn(35);sMx(60)}else{sMn(70);sMx(105)}sRes([])};
   var onCourseSelect=function(d){if(d){sCr(String(d.vc));sSl(String(d.slope));sSel(d.name)}else{sCr("");sSl("");sSel("")}};
-  var run=function(){if(!cr||!sl)return;var ascVal=parseInt(asc)||0;var o=[];for(var g=mn;g<=mx;g++){var r=simRound(p.rounds,g,parseFloat(cr),parseInt(sl),ascVal);var d=r.nh!=null&&p.hi!=null?Math.round((r.nh-p.hi)*10)/10:null;o.push({g:g,hi:r.nh,d:r.df,delta:d,c:r.cp})}sRes(o)};
+  var run=function(){
+    if(!cr||!sl)return;
+    var ascVal=parseInt(asc)||0;
+    var crVal=parseFloat(cr),slVal=parseInt(sl);
+    var o=[];
+    for(var g=mn;g<=mx;g++){
+      var r;
+      if(nine){
+        var diff9=Math.round(((g-crVal-ascVal)*113/slVal)*10)/10;
+        var diffExp=p.hi!=null?Math.round((p.hi/2)*10)/10:0;
+        var diffComb=Math.round((diff9+diffExp)*10)/10;
+        r=simRound(p.rounds,g,crVal,slVal,ascVal,diffComb);
+        r.d9=diff9;r.dExp=diffExp;r.df=diffComb;
+      }else{
+        r=simRound(p.rounds,g,crVal,slVal,ascVal);
+      }
+      var d=r.nh!=null&&p.hi!=null?Math.round((r.nh-p.hi)*10)/10:null;
+      o.push({g:g,hi:r.nh,d:r.df,d9:r.d9,dExp:r.dExp,delta:d,c:r.cp});
+    }
+    sRes(o);
+  };
   var thr=res.find(function(s){return s.delta!=null&&s.delta<0});
   var ci=res.findIndex(function(s,i){return!s.c&&i>0&&res.slice(i).every(function(r){return r.hi===s.hi})});
   var ceil=ci>=0?res[ci]:null;var disp=ceil?res.slice(0,ci):res;
   var simT=getTC(Math.min(p.rounds.length,19)+1);
   return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}><span style={{fontSize:"20px"}}>{String.fromCodePoint(0x1F3CC,0xFE0F)}</span><h2 style={{margin:0,fontSize:"17px",color:C.gold,fontWeight:"normal"}}>Simulador</h2></div>
+    <div onClick={onNineToggle} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px",cursor:"pointer",userSelect:"none"}}>
+      <div style={{width:"18px",height:"18px",borderRadius:"4px",border:"1px solid "+(nine?C.good:C.border),background:nine?"rgba(93,184,112,0.25)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {nine?<span style={{fontSize:"11px",color:C.good}}>{"\u2714"}</span>:null}
+      </div>
+      <span style={{fontSize:"12px",color:nine?C.good:C.dim}}>Ronda de 9 hoyos</span>
+    </div>
+    {nine&&p.hi==null?<div style={{background:"rgba(200,169,81,0.08)",border:"1px solid rgba(200,169,81,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.gold}}>Sin HI registrado: el diferencial esperado se calcula como 0</div>:null}
     <CourseSearch onSelect={onCourseSelect}/>
     {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}</div>:null}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl}>Valor de Campo</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder="71.4" style={inp} type="number" step="0.1"/></div><div><label style={lbl}>Slope</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp} type="number"/></div><div><label style={lbl}>Ajuste ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp} type="number"/></div></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl}>Golpes min</label><input value={mn} onChange={function(e){sMn(parseInt(e.target.value)||70)}} style={inp} type="number"/></div><div><label style={lbl}>Golpes max</label><input value={mx} onChange={function(e){sMx(parseInt(e.target.value)||105)}} style={inp} type="number"/></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl}>{nine?"CR 9 hoyos":"Valor de Campo"}</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder={nine?"35.5":"71.4"} style={inp} type="number" step="0.1"/></div><div><label style={lbl}>{nine?"Slope 9 hoyos":"Slope"}</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp} type="number"/></div><div><label style={lbl}>Ajuste ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp} type="number"/></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl}>Golpes min</label><input value={mn} onChange={function(e){sMn(parseInt(e.target.value)||(nine?35:70))}} style={inp} type="number"/></div><div><label style={lbl}>Golpes max</label><input value={mx} onChange={function(e){sMx(parseInt(e.target.value)||(nine?60:105))}} style={inp} type="number"/></div></div>
     <button onClick={run} style={{background:"linear-gradient(135deg,"+C.green+","+C.gl+")",border:"none",borderRadius:"10px",color:"white",padding:"14px",cursor:"pointer",fontSize:"14px",fontFamily:"monospace",width:"100%"}}>SIMULAR</button>
-    {res.length>0?<div style={{marginTop:"18px"}}>{thr?<div style={{background:"rgba(93,184,112,0.12)",border:"1px solid rgba(93,184,112,0.25)",borderRadius:"10px",padding:"12px",marginBottom:"12px",fontSize:"13px",color:C.good}}>Para bajar el HI: <strong>{thr.g} golpes o menos</strong></div>:null}<div style={{maxHeight:"300px",overflowY:"auto"}}><div style={{display:"grid",gridTemplateColumns:"55px 80px 80px 70px 40px",gap:"4px",padding:"6px 8px",fontSize:"9px",color:C.dim,borderBottom:"1px solid "+C.border,marginBottom:"6px"}}><span>BRUTA</span><span>DIFER.</span><span>NUEVO HI</span><span>CAMBIO</span><span style={{textAlign:"center"}}>{"\u2B50"}</span></div>{disp.map(function(s,i){var dc=s.delta<0?C.good:s.delta>0?C.bad:C.dim;return<div key={i} style={{display:"grid",gridTemplateColumns:"55px 80px 80px 70px 40px",gap:"4px",padding:"5px 8px",borderRadius:"6px",background:s.delta<0?"rgba(93,184,112,0.06)":s.delta>0?"rgba(208,96,96,0.05)":"transparent",fontSize:"13px",fontFamily:"monospace"}}><span style={{color:C.white}}>{s.g}</span><span style={{color:C.dim}}>{s.d.toFixed(1)}</span><span style={{color:C.gold,fontWeight:"600"}}>{s.hi!=null?s.hi.toFixed(1):"\u2014"}</span><span style={{color:dc}}>{s.delta!=null?(s.delta>0?"\u25B2":s.delta<0?"\u25BC":"\u2550"):"\u2014"} {s.delta!=null?Math.abs(s.delta).toFixed(1):""}</span><span style={{textAlign:"center",fontSize:"11px"}}>{s.c?"\u2B50":"\u2014"}</span></div>})}</div>{ceil?<div style={{marginTop:"12px",padding:"14px",background:"rgba(200,169,81,0.08)",border:"1px solid rgba(200,169,81,0.2)",borderRadius:"10px",fontSize:"12px",color:C.dim}}><span style={{color:C.gold,fontWeight:"600"}}>A partir de {ceil.g} golpes: HI = {ceil.hi!=null?ceil.hi.toFixed(1):""}</span></div>:null}</div>:null}
+    {res.length>0?<div style={{marginTop:"18px"}}>
+      {nine?<div style={{background:"rgba(200,169,81,0.06)",border:"1px solid rgba(200,169,81,0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"10px",color:C.dim}}>Difer. combinado = difer. 9H + esperado WHS (HI/2{p.hi!=null?" = "+Math.round(p.hi/2*10)/10:""}). Estimacion aproximada; el calculo oficial RFEG puede variar en decimas.</div>:null}
+      {thr&&!nine?<div style={{background:"rgba(93,184,112,0.12)",border:"1px solid rgba(93,184,112,0.25)",borderRadius:"10px",padding:"12px",marginBottom:"12px",fontSize:"13px",color:C.good}}>Para bajar el HI: <strong>{thr.g} golpes o menos</strong></div>:null}
+      <div style={{maxHeight:"300px",overflowY:"auto"}}>
+        <div style={{display:"grid",gridTemplateColumns:nine?"45px 100px 80px 70px 40px":"55px 80px 80px 70px 40px",gap:"4px",padding:"6px 8px",fontSize:"9px",color:C.dim,borderBottom:"1px solid "+C.border,marginBottom:"6px"}}>
+          <span>BRUTA</span><span>{nine?"DIFER. COMB.":"DIFER."}</span><span>NUEVO HI</span><span>CAMBIO</span><span style={{textAlign:"center"}}>{"\u2B50"}</span>
+        </div>
+        {disp.map(function(s,i){var dc=s.delta<0?C.good:s.delta>0?C.bad:C.dim;return<div key={i} style={{display:"grid",gridTemplateColumns:nine?"45px 100px 80px 70px 40px":"55px 80px 80px 70px 40px",gap:"4px",padding:"5px 8px",borderRadius:"6px",background:s.delta<0?"rgba(93,184,112,0.06)":s.delta>0?"rgba(208,96,96,0.05)":"transparent",fontSize:"13px",fontFamily:"monospace"}}>
+          <span style={{color:C.white}}>{s.g}</span>
+          <span style={{color:C.dim}}>{nine?<span style={{fontSize:"11px"}}>{s.d9!=null?s.d9.toFixed(1):""}+{s.dExp!=null?s.dExp.toFixed(1):""}=<strong style={{color:C.white}}>{s.d.toFixed(1)}</strong></span>:s.d.toFixed(1)}</span>
+          <span style={{color:C.gold,fontWeight:"600"}}>{s.hi!=null?s.hi.toFixed(1):"\u2014"}</span>
+          <span style={{color:dc}}>{s.delta!=null?(s.delta>0?"\u25B2":s.delta<0?"\u25BC":"\u2550"):"\u2014"} {s.delta!=null?Math.abs(s.delta).toFixed(1):""}</span>
+          <span style={{textAlign:"center",fontSize:"11px"}}>{s.c?"\u2B50":"\u2014"}</span>
+        </div>})}
+      </div>
+      {ceil?<div style={{marginTop:"12px",padding:"14px",background:"rgba(200,169,81,0.08)",border:"1px solid rgba(200,169,81,0.2)",borderRadius:"10px",fontSize:"12px",color:C.dim}}><span style={{color:C.gold,fontWeight:"600"}}>A partir de {ceil.g} golpes: HI = {ceil.hi!=null?ceil.hi.toFixed(1):""}</span></div>:null}
+    </div>:null}
   </Card>)
 }
 
