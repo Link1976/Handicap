@@ -243,15 +243,8 @@ function extractSlug(url) { const m = url.match(/\/club\/([^?#]+)/); return m ? 
 // ─── Club Course Data ───────────────────────────────────────────────────────
 
 async function getClubCourses(clubId, slug, env) {
-  const cacheKey = `courses_${clubId}`;
-  if (env?.RFEG_CACHE) {
-    const cached = await env.RFEG_CACHE.get(cacheKey);
-    if (cached) { const d = JSON.parse(cached); d._cached = true; return d; }
-  }
+  // Cache disabled: always scrape live to ensure CR/Slope are up to date
   const data = await scrapeClubPage(clubId, slug);
-  if (env?.RFEG_CACHE && data.tees?.length > 0) {
-    await env.RFEG_CACHE.put(cacheKey, JSON.stringify(data), { expirationTtl: COURSE_CACHE_TTL });
-  }
   return data;
 }
 
@@ -282,6 +275,15 @@ function parseClubHTML(html, clubId, slug) {
     tees.push({ recorrido: def?.recorrido || `Tee ${idx+1}`, tee: def?.tee || "?", gender: def?.gender || "?", par: parseInt(bm[1]), vc: parseFloat(bm[3].replace(",",".")), vs: parseInt(bm[4]), meters: parseInt(bm[2]) });
     idx++;
   }
+  // Fix swapped M/F genders: for the same tee color, F always has higher VC than M
+  const teeColors = [...new Set(tees.map(t => t.tee))];
+  teeColors.forEach(color => {
+    const mTee = tees.find(t => t.tee === color && t.gender === "M");
+    const fTee = tees.find(t => t.tee === color && t.gender === "F");
+    if (mTee && fTee && mTee.vc > fTee.vc) {
+      [mTee.gender, fTee.gender] = ["F", "M"];
+    }
+  });
   return { club, club_id: parseInt(clubId), slug, total_tees: tees.length, tees, source: "rfegolf.es", scraped_at: new Date().toISOString() };
 }
 
