@@ -26,7 +26,6 @@ input[type=number]{-moz-appearance:textfield}
 
 var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useCallback=React.useCallback;
 var RFEG_URL="https://api.rfeg.es/files/summaryhandicap/";
-var WORKER="https://golf-rfeg-pro.alberto76.workers.dev";
 var COURSES_API="https://rfeg-courses.alberto76.workers.dev";
 
 // Known federated ID mappings (bootstrapped, user can add more)
@@ -42,8 +41,7 @@ function addHP(l,hi){var h=loadHistory(l);if(h.length===0){h.push({date:new Date
 // WHS Engine
 function getTakeCount(count) {
   return count >= 20 ? 8 : count >= 19 ? 7 : count >= 17 ? 6 : count >= 15 ? 5 :
-    count >= 13 ? 4 : count >= 11 ? 3 : count >= 9 ? 2 : count >= 7 ? 2 :
-    count >= 5 ? 1 : count >= 3 ? 1 : 0;
+    count >= 12 ? 4 : count >= 9 ? 3 : count >= 6 ? 2 : count >= 3 ? 1 : 0;
 }
 
 function calcHandicapIndex(rounds) {
@@ -55,7 +53,7 @@ function calcHandicapIndex(rounds) {
   const sorted = [...w].map((r, i) => ({ ...r, i }))
     .sort((a, b) => a.differential - b.differential || b.i - a.i);
   const avg = sorted.slice(0, take).reduce((s, r) => s + r.differential, 0) / take;
-  return Math.round(avg * 10) / 10;
+  return Math.min(Math.round(avg * 10) / 10, 54.0);
 }
 
 function getBestIndices(rounds) {
@@ -583,8 +581,7 @@ function Simulator(p){
   var thr=res.find(function(s){return s.delta!=null&&s.delta<0});
   var ci=res.findIndex(function(s,i){return!s.c&&i>0&&res.slice(i).every(function(r){return r.hi===s.hi})});
   var ceil=ci>=0?res[ci]:null;var disp=ceil?res.slice(0,ci):res;
-  var simT=getTC(Math.min(p.rounds.length,19)+1);
-  return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}><span style={{fontSize:"20px"}}>{String.fromCodePoint(0x1F3CC,0xFE0F)}</span><h2 style={{margin:0,fontSize:"17px",color:C.gold,fontWeight:"normal"}}>Simulador</h2></div>
+return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}><span style={{fontSize:"20px"}}>{String.fromCodePoint(0x1F3CC,0xFE0F)}</span><h2 style={{margin:0,fontSize:"17px",color:C.gold,fontWeight:"normal"}}>Simulador</h2></div>
     <div onClick={onNineToggle} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px",cursor:"pointer",userSelect:"none"}}>
       <div style={{width:"18px",height:"18px",borderRadius:"4px",border:"1px solid "+(nine?C.good:C.border),background:nine?"rgba(93,184,112,0.25)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         {nine?<span style={{fontSize:"11px",color:C.good}}>{"\u2714"}</span>:null}

@@ -14,7 +14,6 @@
 
 const RFEG_WEB = "https://rfegolf.es";
 const RFEGOLF_API = "https://api.rfegolf.es";
-const COURSE_CACHE_TTL = 30 * 24 * 3600;
 const SEARCH_CACHE_TTL = 7 * 24 * 3600;
 
 const CORS = {
@@ -116,7 +115,7 @@ async function rfegLogin(username, password) {
     .join("; ");
 
   if (!cookieStr) {
-    throw new Error(`Login: no cookies received (status ${resp.status})`);
+    throw new Error(resp.status === 200 ? "Credenciales incorrectas" : `Login fallido (HTTP ${resp.status})`);
   }
 
   return cookieStr;
