@@ -552,17 +552,19 @@ function PlayingHCP(p){
 }
 
 function Simulator(p){
-  var _cr=useState(""),cr=_cr[0],sCr=_cr[1],_sl=useState(""),sl=_sl[0],sSl=_sl[1],_asc=useState("0"),asc=_asc[0],sAsc=_asc[1],_mn=useState(70),mn=_mn[0],sMn=_mn[1],_mx=useState(105),mx=_mx[0],sMx=_mx[1],_r=useState([]),res=_r[0],sRes=_r[1];
+  var _cr=useState(""),cr=_cr[0],sCr=_cr[1],_sl=useState(""),sl=_sl[0],sSl=_sl[1],_asc=useState("0"),asc=_asc[0],sAsc=_asc[1],_mn=useState("70"),mn=_mn[0],sMn=_mn[1],_mx=useState("105"),mx=_mx[0],sMx=_mx[1],_r=useState([]),res=_r[0],sRes=_r[1];
   var _sel=useState(""),sel=_sel[0],sSel=_sel[1];
   var _nine=useState(false),nine=_nine[0],sNine=_nine[1];
-  var onNineToggle=function(){var n=!nine;sNine(n);if(n){sMn(35);sMx(60)}else{sMn(70);sMx(105)}sRes([])};
+  var onNineToggle=function(){var n=!nine;sNine(n);if(n){sMn("35");sMx("60")}else{sMn("70");sMx("105")}sRes([])};
   var onCourseSelect=function(d){if(d){sCr(String(d.vc));sSl(String(d.slope));sSel(d.name)}else{sCr("");sSl("");sSel("")}};
   var run=function(){
     if(!cr||!sl)return;
     var ascVal=parseInt(asc)||0;
     var crVal=parseFloat(cr),slVal=parseInt(sl);
+    var mnVal=parseInt(mn)||(nine?35:70);
+    var mxVal=parseInt(mx)||(nine?60:105);
     var o=[];
-    for(var g=mn;g<=mx;g++){
+    for(var g=mnVal;g<=mxVal;g++){
       var r;
       if(nine){
         var diff9=Math.round(((g-crVal-ascVal)*113/slVal)*10)/10;
@@ -592,7 +594,7 @@ return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItem
     <CourseSearch onSelect={onCourseSelect}/>
     {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}</div>:null}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl}>{nine?"CR 9 hoyos":"Valor de Campo"}</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder={nine?"35.5":"71.4"} style={inp} type="number" step="0.1"/></div><div><label style={lbl}>{nine?"Slope 9 hoyos":"Slope"}</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp} type="number"/></div><div><label style={lbl}>Ajuste ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp} type="number"/></div></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl}>Golpes min</label><input value={mn} onChange={function(e){sMn(parseInt(e.target.value)||(nine?35:70))}} style={inp} type="number"/></div><div><label style={lbl}>Golpes max</label><input value={mx} onChange={function(e){sMx(parseInt(e.target.value)||(nine?60:105))}} style={inp} type="number"/></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl}>Golpes min</label><input value={mn} onChange={function(e){sMn(e.target.value)}} style={inp} type="number"/></div><div><label style={lbl}>Golpes max</label><input value={mx} onChange={function(e){sMx(e.target.value)}} style={inp} type="number"/></div></div>
     <button onClick={run} style={{background:"linear-gradient(135deg,"+C.green+","+C.gl+")",border:"none",borderRadius:"10px",color:"white",padding:"14px",cursor:"pointer",fontSize:"14px",fontFamily:"monospace",width:"100%"}}>SIMULAR</button>
     {res.length>0?<div style={{marginTop:"18px"}}>
       {nine?<div style={{background:"rgba(200,169,81,0.06)",border:"1px solid rgba(200,169,81,0.15)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"10px",color:C.dim}}>Difer. combinado = difer. 9H + esperado WHS (HI/2{p.hi!=null?" = "+Math.round(p.hi/2*10)/10:""}). Estimacion aproximada; el calculo oficial RFEG puede variar en decimas.</div>:null}
