@@ -154,12 +154,11 @@ El cache de tees se deshabilitó porque la RFEG actualiza CR/Slope sin aviso y e
 
 ### Scraping de tees — `parseClubHTML`
 
-Parsea `rfegolf.es/club/{slug}?id={clubId}` con regex:
+Parsea `rfegolf.es/club/{slug}?id={clubId}` con dos pasos:
 1. Extrae definiciones de tee de las llamadas `selectWay(nombre, color, género, orden, wayId)`
-2. Extrae bloques `TOTAL/Vc/Vs` con CR y Slope
-3. Empareja ambas listas por orden de aparición en el HTML
+2. Para cada tee, localiza su sección HTML mediante el ancla `id="holes_{wayId}"` y extrae el bloque `TOTAL/Vc/Vs` dentro de esa sección
 
-**Corrección automática de géneros:** Si para el mismo color de tee el tee M tiene mayor VC que el F (viola la norma WHS/RFEG donde F siempre tiene VC y Slope superiores), se intercambian los géneros. Corrige un error de datos conocido en la RFEG (detectado en Centro Nacional de Golf).
+Los tees sin bloque en su sección (normalmente porque comparten tabla con otro tee) se omiten del resultado. Este enfoque es robusto frente a campos donde el número de bloques no coincide con el número de `selectWay` (problema presente en El Encín, CNG y otros campos de la RFEG).
 
 ### Autenticación RFEG
 
