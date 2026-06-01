@@ -264,25 +264,26 @@ function parseClubHTML(html, clubId, slug) {
   let wm;
   while ((wm = wayRe.exec(html)) !== null) {
     const dashIdx = wm[1].lastIndexOf(" - ");
-    wayDefs.push({ recorrido: dashIdx >= 0 ? wm[1].substring(dashIdx + 3).trim() : wm[1], tee: wm[2], gender: wm[3] });
+    wayDefs.push({ recorrido: dashIdx >= 0 ? wm[1].substring(dashIdx + 3).trim() : wm[1], tee: wm[2], gender: wm[3], wayId: wm[5] });
   }
+
+  // Each tee's scorecard section is anchored by id="holes_{wayId}" in the HTML.
+  // Find the TOTAL block within each section; skip tees with no block.
+  const blockRe = /TOTAL[\s\S]*?>\s*(\d{2,3})\s*<[\s\S]*?>\s*(\d{3,5})\s*<[\s\S]*?Vc[\s\S]*?>\s*([\d]+[,.][\d]+)\s*<[\s\S]*?Vs[\s\S]*?>\s*(\d+)\s*</i;
+  const nextSectionRe = /id="holes_\d+"/;
+
   const tees = [];
-  const blockRe = /TOTAL[\s\S]*?>\s*(\d{2,3})\s*<[\s\S]*?>\s*(\d{3,5})\s*<[\s\S]*?Vc[\s\S]*?>\s*([\d]+[,.][\d]+)\s*<[\s\S]*?Vs[\s\S]*?>\s*(\d+)\s*</gi;
-  let bm, idx = 0;
-  while ((bm = blockRe.exec(html)) !== null) {
-    const def = wayDefs[idx];
-    tees.push({ recorrido: def?.recorrido || `Tee ${idx+1}`, tee: def?.tee || "?", gender: def?.gender || "?", par: parseInt(bm[1]), vc: parseFloat(bm[3].replace(",",".")), vs: parseInt(bm[4]), meters: parseInt(bm[2]) });
-    idx++;
+  for (const def of wayDefs) {
+    const anchor = `id="holes_${def.wayId}"`;
+    const secStart = html.indexOf(anchor);
+    if (secStart < 0) continue;
+    const rest = html.slice(secStart + anchor.length);
+    const nextMatch = rest.match(nextSectionRe);
+    const section = rest.slice(0, nextMatch ? rest.indexOf(nextMatch[0]) : rest.length);
+    const bm = section.match(blockRe);
+    if (!bm) continue;
+    tees.push({ recorrido: def.recorrido, tee: def.tee, gender: def.gender, par: parseInt(bm[1]), vc: parseFloat(bm[3].replace(",",".")), vs: parseInt(bm[4]), meters: parseInt(bm[2]) });
   }
-  // Fix swapped M/F genders: for the same tee color, F always has higher VC than M
-  const teeColors = [...new Set(tees.map(t => t.tee))];
-  teeColors.forEach(color => {
-    const mTee = tees.find(t => t.tee === color && t.gender === "M");
-    const fTee = tees.find(t => t.tee === color && t.gender === "F");
-    if (mTee && fTee && mTee.vc > fTee.vc) {
-      [mTee.gender, fTee.gender] = ["F", "M"];
-    }
-  });
   return { club, club_id: parseInt(clubId), slug, total_tees: tees.length, tees, source: "rfegolf.es", scraped_at: new Date().toISOString() };
 }
 
