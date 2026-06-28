@@ -290,20 +290,34 @@ function parseClubHTML(html, clubId, slug) {
 // ─── Fetch PDF with Public Token ─────────────────────────────────────────────
 
 async function fetchPDF(license) {
+  // The RFEG file server (api.rfeg.es) returns HTTP 500 randomly ~50% of the
+  // time for a valid license. Retry a few times server-side so the caller does
+  // not have to click repeatedly until it succeeds.
+  const MAX_ATTEMPTS = 5;
+  const RETRY_DELAY_MS = 400;
   const token = await getFreshToken();
   const pdfUrl = `https://api.rfeg.es/files/summaryhandicap/${license}.pdf`;
-  const resp = await fetch(pdfUrl, {
-    redirect: "manual",
-    headers: { "Authorization": token, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "application/pdf,*/*" },
-  });
-  let finalResp = resp;
-  if ([301,302,307,308].includes(resp.status)) {
-    const loc = resp.headers.get("location");
-    if (loc) finalResp = await fetch(loc, { headers: { "Authorization": token, "User-Agent": "Mozilla/5.0", "Accept": "application/pdf,*/*" } });
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+  let lastStatus = 0;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const resp = await fetch(pdfUrl, {
+      redirect: "manual",
+      headers: { "Authorization": token, "User-Agent": ua, "Accept": "application/pdf,*/*" },
+    });
+    let finalResp = resp;
+    if ([301,302,307,308].includes(resp.status)) {
+      const loc = resp.headers.get("location");
+      if (loc) finalResp = await fetch(loc, { headers: { "Authorization": token, "User-Agent": "Mozilla/5.0", "Accept": "application/pdf,*/*" } });
+    }
+    if (finalResp.ok) {
+      return new Response(finalResp.body, {
+        status: 200,
+        headers: { "Content-Type": "application/pdf", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST", "Cache-Control": "no-cache" },
+      });
+    }
+    lastStatus = finalResp.status;
+    if (attempt < MAX_ATTEMPTS) await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
   }
-  if (!finalResp.ok) return new Response(`RFEG PDF error: ${finalResp.status}`, { status: finalResp.status, headers: { "Access-Control-Allow-Origin": "*" } });
-  return new Response(finalResp.body, {
-    status: 200,
-    headers: { "Content-Type": "application/pdf", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST", "Cache-Control": "no-cache" },
-  });
+  return new Response(`RFEG PDF error: ${lastStatus}`, { status: lastStatus, headers: { "Access-Control-Allow-Origin": "*" } });
 }
