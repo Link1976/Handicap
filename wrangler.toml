@@ -5,5 +5,10 @@ account_id = "2f76ec85070e67606a8679a5d99164fe"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.webmanifest"]
+fallthrough = false
+
+[[rules]]
+type = "Data"
+globs = ["**/*.png"]
 fallthrough = false
