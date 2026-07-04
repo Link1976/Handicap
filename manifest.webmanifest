@@ -1,11 +1,11 @@
 {
-  "name": "Golf Handicap RFEG",
-  "short_name": "Handicap",
+  "name": "HCAPP — RFEG · WHS",
+  "short_name": "HCAPP",
   "description": "Consulta tu handicap RFEG, evolucion, estadisticas y simulador WHS",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0b1c04",
-  "theme_color": "#0b1c04",
+  "background_color": "#046A38",
+  "theme_color": "#046A38",
   "lang": "es",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
