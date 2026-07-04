@@ -155,6 +155,22 @@ function simulateNextRound(rounds, gross, cr, slope, asc, overrideDiff) {
 var getTC=getTakeCount,calcHI=calcHandicapIndex,getBest=getBestIndices;
 function simRound(rds,g,cr,sl,asc,overrideDiff){var r=simulateNextRound(rds,g,cr,sl,asc,overrideDiff);return{nh:r.newHandicap,df:r.differential,cp:r.computes}}
 
+// Reconstruye una curva de evolucion del HI a partir de las rondas ya conocidas (sin depender
+// de haber consultado la app varias veces): para cada ronda, recalcula el HI que habria dado el
+// motor WHS con las rondas disponibles hasta esa fecha. Es una aproximacion (sin PCC/ESR/topes de
+// subida, y sin visibilidad de rondas anteriores a las que trae el PDF) — no el historico oficial exacto.
+function ddmmyyyyToIso(str){var p=(str||"").split("/");if(p.length!==3)return"";return p[2]+"-"+p[1]+"-"+p[0]}
+function estimateHIHistory(rounds){
+  if(!rounds||!rounds.length)return[];
+  var out=[];
+  for(var i=2;i<rounds.length;i++){
+    var window=rounds.slice(0,i+1);
+    var hi=calcHandicapIndex(window);
+    if(hi!=null)out.push({date:ddmmyyyyToIso(rounds[i].date),hi:hi});
+  }
+  return out;
+}
+
 
 
 // PDF Parser
@@ -367,8 +383,8 @@ function extractPage1Data(t) {
 // los C.xxx actuales en cada render. lbl()/inp() son funciones (no objetos estaticos) por el mismo motivo:
 // deben leer los colores vigentes en el momento de renderizar, no los que habia al cargar el modulo.
 var THEMES={
-  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3"},
-  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38"}
+  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3",pillBorder:"#F5D400"},
+  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38",pillBorder:"#046A38"}
 };
 var C=Object.assign({},THEMES.dark);
 function applyTheme(paper){Object.assign(C,paper?THEMES.paper:THEMES.dark)}
@@ -426,7 +442,7 @@ function LockIcon(p){return p.open?
 }
 
 function Header(p){return(<div onClick={p.onHome||undefined} style={{borderBottom:"1px solid "+C.border,padding:"12px 20px",display:"flex",alignItems:"center",gap:"10px",background:"rgba(0,0,0,0.12)",position:"sticky",top:0,zIndex:100,backdropFilter:"blur(10px)",cursor:p.onHome?"pointer":"default"}}>
-  <div style={{display:"flex",alignItems:"center",gap:"8px",border:"1.5px solid "+C.accent,borderRadius:"40px",padding:"4px 14px 4px 4px"}}>
+  <div style={{display:"flex",alignItems:"center",gap:"8px",border:"1.5px solid "+C.pillBorder,borderRadius:"40px",padding:"4px 14px 4px 4px"}}>
     <Logo size={24} full={false}/>
     <span style={{fontSize:"14px",fontWeight:"800",fontFamily:"'Space Grotesk',sans-serif",color:C.white,letterSpacing:"0.05em"}}>HCAPP</span>
   </div>
@@ -918,6 +934,8 @@ function App(){
   var hi=data?(data.hi!=null?data.hi:calcHI(last20)):null;
   var usedSet=last20.length?getBest(last20):new Set();
   var curProf=profs.find(function(p){return p.license===curLic});
+  var estHist=data&&data.rounds?estimateHIHistory(data.rounds):[];
+  var chartHist=estHist.length>=2?estHist:hist;
 
   return(<div style={{minHeight:"100vh",background:C.bg}}>
     <Header onHome={step!=="home"?goHome:null} paper={paper} onTogglePaper={togglePaper}/>
@@ -997,16 +1015,20 @@ function App(){
         var l5=last20.slice(-5);
         if(l5.length<2)return null;
         var vs=l5.map(function(r){return r.differential});var lo=Math.min.apply(null,vs),hiV=Math.max.apply(null,vs),rg=(hiV-lo)||1;
-        var W=320,H=40,pad=6;
-        var pts=l5.map(function(r,i){return (i/(l5.length-1)*W)+","+(pad+(1-(r.differential-lo)/rg)*(H-2*pad))});
-        var lastPt=pts[pts.length-1].split(",");
+        var W=320,H=64,padTop=20,padBottom=8;
+        var xy=l5.map(function(r,i){return {x:i/(l5.length-1)*W,y:padTop+(1-(r.differential-lo)/rg)*(H-padTop-padBottom),v:r.differential}});
+        var pts=xy.map(function(p){return p.x+","+p.y});
+        var last=xy[xy.length-1];
         return<div style={{marginBottom:"20px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid "+C.dimmer,borderBottom:"1px solid "+C.dimmer,padding:"10px 2px",marginBottom:"8px"}}>
-            <span style={{fontSize:"10px",color:C.dim,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600"}}>Ultimas {l5.length} rondas</span>
+            <span style={{fontSize:"10px",color:C.dim,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600"}}>Ultimas {l5.length} rondas (diferencial)</span>
           </div>
           <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H}>
             <polyline points={pts.join(" ")} fill="none" stroke={C.contour} strokeWidth="2"/>
-            <circle cx={lastPt[0]} cy={lastPt[1]} r="4" fill={C.accent}/>
+            {xy.map(function(p,i){var isLast=i===xy.length-1;return<g key={i}>
+              <circle cx={p.x} cy={p.y} r={isLast?4:3} fill={isLast?C.accent:C.contour}/>
+              <text x={p.x} y={p.y-8} textAnchor={i===0?"start":i===xy.length-1?"end":"middle"} fill={isLast?C.accent:C.white} fontSize="10" fontFamily="'JetBrains Mono',monospace" fontWeight={isLast?"700":"500"}>{p.v.toFixed(1)}</text>
+            </g>})}
           </svg>
         </div>
       })()}
@@ -1022,15 +1044,16 @@ function App(){
         })}
       </div>
 
-      {tab==="evo"?<Card style={{marginBottom:"20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px",gap:"6px",flexWrap:"wrap"}}><h2 style={{margin:0,fontSize:"16px",color:C.white,fontWeight:"600"}}>Evolucion del Handicap</h2>
+      {tab==="evo"?<Card style={{marginBottom:"20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px",gap:"6px",flexWrap:"wrap"}}><h2 style={{margin:0,fontSize:"16px",color:C.white,fontWeight:"600"}}>Evolucion del Handicap</h2>
         <div style={{display:"flex",gap:"6px"}}>
-        {hist.length>=2?<button onClick={function(){setShareErr("");shareChartPNG("hichart",data.name||"Jugador",hi,setShareErr)}} style={{background:"rgba(232,223,195,0.15)",border:"1px solid rgba(232,223,195,0.3)",borderRadius:"8px",color:C.gold,padding:"5px 12px",cursor:"pointer",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}>COMPARTIR</button>:null}
+        {chartHist.length>=2?<button onClick={function(){setShareErr("");shareChartPNG("hichart",data.name||"Jugador",hi,setShareErr)}} style={{background:"rgba(232,223,195,0.15)",border:"1px solid rgba(232,223,195,0.3)",borderRadius:"8px",color:C.gold,padding:"5px 12px",cursor:"pointer",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}>COMPARTIR</button>:null}
         {profs.length>1&&!compP?<button onClick={function(){var o=profs.filter(function(x){return x.license!==curLic});if(o.length===1){setCompP(o[0]);setHist2(loadHistory(o[0].license))}}} style={{background:"rgba(91,155,213,0.15)",border:"1px solid rgba(91,155,213,0.3)",borderRadius:"8px",color:C.blue,padding:"5px 12px",cursor:"pointer",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}>COMPARAR</button>:null}
         {compP?<button onClick={function(){setCompP(null);setHist2([])}} style={{background:"rgba(91,155,213,0.15)",border:"1px solid rgba(91,155,213,0.3)",borderRadius:"8px",color:C.blue,padding:"5px 12px",cursor:"pointer",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}>QUITAR</button>:null}
         </div>
       </div>
+      {estHist.length>=2&&chartHist===estHist?<div style={{fontSize:"10.5px",color:C.dim,marginBottom:"10px",lineHeight:1.4}}>Estimacion a partir de tus rondas (no incluye PCC/ESR ni topes de subida del WHS oficial)</div>:null}
       {shareErr?<div style={{fontSize:"11px",color:C.bad,marginBottom:"10px"}}>{shareErr}</div>:null}
-      <div id="hichart"><HIChart history={hist} h2={compP?hist2:null} n1={curProf?(curProf.name||"").split(",")[0].split(" ")[0]:""} n2={compP?(compP.name||"").split(",")[0].split(" ")[0]:""}/></div></Card>:null}
+      <div id="hichart"><HIChart history={chartHist} h2={compP?hist2:null} n1={curProf?(curProf.name||"").split(",")[0].split(" ")[0]:""} n2={compP?(compP.name||"").split(",")[0].split(" ")[0]:""}/></div></Card>:null}
 
       {tab==="campos"?<CourseStats rounds={data.rounds} mob={mob}/>:null}
 
