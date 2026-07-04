@@ -367,8 +367,8 @@ function extractPage1Data(t) {
 // los C.xxx actuales en cada render. lbl()/inp() son funciones (no objetos estaticos) por el mismo motivo:
 // deben leer los colores vigentes en el momento de renderizar, no los que habia al cargar el modulo.
 var THEMES={
-  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3"},
-  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38"}
+  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3"},
+  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38"}
 };
 var C=Object.assign({},THEMES.dark);
 function applyTheme(paper){Object.assign(C,paper?THEMES.paper:THEMES.dark)}
@@ -717,7 +717,7 @@ function PlayingHCP(p){
     <CourseSearch onSelect={onCourseSelect}/>
     {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}</div>:null}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"12px"}}>
-      <div><label style={lbl()}>Valor de Campo</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder="71.4" style={inp()} type="number" step="0.1"/></div>
+      <div><label style={lbl()}>V. Campo</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder="71.4" style={inp()} type="number" step="0.1"/></div>
       <div><label style={lbl()}>Slope</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp()} type="number"/></div>
       <div><label style={lbl()}>Par</label><input value={par} onChange={function(e){sPar(e.target.value)}} placeholder="72" style={inp()} type="number"/></div>
     </div>
@@ -776,7 +776,7 @@ return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItem
     {nine&&p.hi==null?<div style={{background:"rgba(232,223,195,0.08)",border:"1px solid rgba(232,223,195,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.gold}}>Sin HI registrado: el diferencial esperado se calcula como 0</div>:null}
     <CourseSearch onSelect={onCourseSelect}/>
     {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}</div>:null}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl()}>{nine?"CR 9 hoyos":"Valor de Campo"}</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder={nine?"35.5":"71.4"} style={inp()} type="number" step="0.1"/></div><div><label style={lbl()}>{nine?"Slope 9 hoyos":"Slope"}</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp()} type="number"/></div><div><label style={lbl()}>Ajuste ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp()} type="number"/></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl()}>{nine?"CR 9H":"V. Campo"}</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder={nine?"35.5":"71.4"} style={inp()} type="number" step="0.1"/></div><div><label style={lbl()}>{nine?"Slope 9H":"Slope"}</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp()} type="number"/></div><div><label style={lbl()}>ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp()} type="number"/></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl()}>Golpes min</label><input value={mn} onChange={function(e){sMn(e.target.value)}} style={inp()} type="number"/></div><div><label style={lbl()}>Golpes max</label><input value={mx} onChange={function(e){sMx(e.target.value)}} style={inp()} type="number"/></div></div>
     <button onClick={run} style={{background:C.green,border:"none",borderRadius:"10px",color:C.white,padding:"14px",cursor:"pointer",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace",width:"100%"}}>SIMULAR</button>
     {res.length>0?<div style={{marginTop:"18px"}}>
@@ -921,7 +921,7 @@ function App(){
 
   return(<div style={{minHeight:"100vh",background:C.bg}}>
     <Header onHome={step!=="home"?goHome:null} paper={paper} onTogglePaper={togglePaper}/>
-    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px":"36px 20px"}}>
+    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px 84px":"36px 20px"}}>
 
     {step==="home"?<div className="fade-in">
       <div style={{textAlign:"center",marginBottom:"32px"}}><div style={{marginBottom:"14px",display:"flex",justifyContent:"center"}}><Logo size={64} full={true}/></div><h1 style={{fontSize:mob?"24px":"30px",margin:"0 0 8px",fontWeight:"800",fontFamily:"'Space Grotesk',sans-serif",color:C.white,letterSpacing:"0.02em"}}>HCAPP</h1><p style={{color:C.dim,fontSize:"13px"}}>Selecciona un jugador o introduce una nueva licencia</p></div>
@@ -989,7 +989,7 @@ function App(){
       </Card>:null}
 
       {(function(){var l10=data.rounds.slice(-10),l5=data.rounds.slice(-5);var h10=l10.length?Math.round(l10.reduce(function(s,r){return s+r.differential},0)/l10.length*10)/10:null;var h5=l5.length?Math.round(l5.reduce(function(s,r){return s+r.differential},0)/l5.length*10)/10:null;var t10=h10!=null&&hi!=null?(h10<hi?"good":h10>hi?"bad":"same"):"same";var t5=h5!=null&&hi!=null?(h5<hi?"good":h5>hi?"bad":"same"):"same";
-        return<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:mob?"6px":"12px",marginBottom:"8px"}}>{[{l:"RONDAS",v:data.rounds.length,c:C.white},{l:"COMPUTAN",v:usedSet.size,c:C.accent},{l:"MEJOR",v:last20.length?Math.min.apply(null,last20.map(function(r){return r.differential})).toFixed(1):"—",c:C.white},{l:"MEDIA",v:last20.length?(last20.reduce(function(s,r){return s+r.differential},0)/last20.length).toFixed(1):"—",c:C.white}].map(function(x,i){return<div key={i} style={{background:C.card,border:"1px dashed "+C.border,borderRadius:"10px",padding:mob?"12px 6px":"16px",textAlign:"center"}}><div style={{fontSize:mob?"17px":"22px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"700",color:x.c,marginBottom:"2px"}}>{x.v}</div><div style={{fontSize:mob?"9px":"10px",letterSpacing:"1px",color:C.gd,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600",textTransform:"uppercase"}}>{x.l}</div></div>})}</div>
+        return<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:mob?"6px":"12px",marginBottom:"8px"}}>{[{l:"RONDAS",v:data.rounds.length,c:C.white},{l:"COMPUTAN",v:usedSet.size,c:C.accent},{l:"MEJOR",v:last20.length?Math.min.apply(null,last20.map(function(r){return r.differential})).toFixed(1):"—",c:C.white},{l:"MEDIA",v:last20.length?(last20.reduce(function(s,r){return s+r.differential},0)/last20.length).toFixed(1):"—",c:C.white}].map(function(x,i){return<div key={i} style={{background:C.card,border:"1px dashed "+C.border,borderRadius:"10px",padding:mob?"12px 6px":"16px",textAlign:"center"}}><div style={{fontSize:mob?"17px":"22px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"700",color:x.c,marginBottom:"2px"}}>{x.v}</div><div style={{fontSize:mob?"10.5px":"10px",letterSpacing:"0.5px",color:C.dimStrong,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600",textTransform:"uppercase"}}>{x.l}</div></div>})}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:mob?"6px":"12px",marginBottom:"20px"}}><HIndexCard label="H10" val={h10} trend={t10} win={10} mob={mob}/><HIndexCard label="H5" val={h5} trend={t5} win={5} mob={mob}/></div></div>
       })()}
 
@@ -1011,12 +1011,13 @@ function App(){
         </div>
       })()}
 
-      <div className="tabs" style={{justifyContent:mob?"flex-start":"center",marginBottom:"20px"}}>
+      <div className="tabs" style={mob?{position:"fixed",left:0,right:0,bottom:0,zIndex:150,justifyContent:"space-between",margin:0,background:C.green,borderTop:"1px solid "+C.border,padding:"8px 14px calc(8px + env(safe-area-inset-bottom))",overflowX:"visible"}:{justifyContent:"center",marginBottom:"20px"}}>
         {[{id:"evo",name:"evo",label:"Evolucion",needsRounds:false},{id:"campos",name:"campos",label:"Campos",needsRounds:true},{id:"goal",name:"goal",label:"Objetivo",needsRounds:false},{id:"hcpj",name:"hcpj",label:"HCP Juego"},{id:"rondas",name:"rondas",label:"Rondas",needsRounds:true},{id:"sim",name:"sim",label:"Simulador",needsRounds:true}].filter(function(t){return !data.limitedData||!t.needsRounds}).map(function(t){
           var active=tab===t.id;
-          return<button key={t.id} onClick={function(){setTab(t.id)}} style={{background:"transparent",border:"none",padding:"6px 8px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"4px",minWidth:"58px",flexShrink:0}}>
-            <TabIcon name={t.name} color={active?C.white:C.dim} size={18}/>
-            <span style={{fontSize:"9.5px",letterSpacing:"0.02em",color:active?C.white:C.dim,fontFamily:"'Space Grotesk',sans-serif",fontWeight:active?"600":"500",borderBottom:active?"2px solid "+C.accent:"2px solid transparent",paddingBottom:"3px"}}>{t.label}</span>
+          var inactiveColor=C.dimStrong;
+          return<button key={t.id} onClick={function(){setTab(t.id)}} style={{background:"transparent",border:"none",padding:"6px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"4px",minWidth:mob?"auto":"58px",flexShrink:0}}>
+            <TabIcon name={t.name} color={active?C.white:inactiveColor} size={19}/>
+            <span style={{fontSize:"10.5px",letterSpacing:"0.01em",color:active?C.white:inactiveColor,fontFamily:"'Space Grotesk',sans-serif",fontWeight:active?"600":"500",borderBottom:active?"2px solid "+C.accent:"2px solid transparent",paddingBottom:"3px"}}>{t.label}</span>
           </button>
         })}
       </div>
