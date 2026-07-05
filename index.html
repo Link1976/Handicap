@@ -383,8 +383,8 @@ function extractPage1Data(t) {
 // los C.xxx actuales en cada render. lbl()/inp() son funciones (no objetos estaticos) por el mismo motivo:
 // deben leer los colores vigentes en el momento de renderizar, no los que habia al cargar el modulo.
 var THEMES={
-  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3",pillBorder:"#F5D400"},
-  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38",pillBorder:"#046A38"}
+  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3",pillBorder:"#F5D400",glass:"rgba(255,255,255,0.05)",glassSheen:"rgba(255,255,255,0.14)",glassBorder:"rgba(255,255,255,0.32)",glassShadow:"rgba(0,0,0,0.35)"},
+  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38",pillBorder:"#046A38",glass:"rgba(255,255,255,0.1)",glassSheen:"rgba(255,255,255,0.4)",glassBorder:"rgba(255,255,255,0.55)",glassShadow:"rgba(27,42,33,0.15)"}
 };
 var C=Object.assign({},THEMES.dark);
 function applyTheme(paper){Object.assign(C,paper?THEMES.paper:THEMES.dark)}
@@ -922,8 +922,26 @@ function App(){
   applyTheme(paper); // C es mutable: releer el tema vigente en cada render de App, antes de construir el arbol
   var togglePaper=function(){var n=!paper;savePaperMode(n);setPaper(n)};
   var _,forceUpdate=useState(0)[1];
+  var _tc=useState(false),tabsCompact=_tc[0],setTabsCompact=_tc[1];
 
   useEffect(function(){var fn=function(){setMob(window.innerWidth<700)};window.addEventListener("resize",fn);return function(){window.removeEventListener("resize",fn)}},[]);
+  useEffect(function(){
+    var lastY=window.scrollY,ticking=false,upAccum=0;
+    var onScroll=function(){
+      if(ticking)return;
+      ticking=true;
+      setTimeout(function(){
+        var y=window.scrollY,diff=y-lastY;
+        if(y<40){setTabsCompact(false);upAccum=0}
+        else if(diff>6){setTabsCompact(true);upAccum=0}
+        else if(diff<0){upAccum+=-diff;if(upAccum>140)setTabsCompact(false)}
+        else{upAccum=0}
+        lastY=y;ticking=false;
+      },30);
+    };
+    window.addEventListener("scroll",onScroll,{passive:true});
+    return function(){window.removeEventListener("scroll",onScroll)};
+  },[]);
   function setProfs(p){setProfsS(p);saveProfiles(p)}
   var goHome=function(){setStep("home");setData(null);setCompP(null);setSA(false)};
   var consult=async function(l){setCurLic(l);setErr("");setData(null);setStep("loading");try{var p=await fetchParse(l,setLMsg);setData(p);var pp=loadProfiles();var ex=pp.findIndex(function(x){return x.license===l});var pd={license:l,name:p.name,hi:p.hi,lastUpdate:new Date().toISOString().slice(0,10)};if(ex>=0)pp[ex]=pd;else pp.push(pd);setProfs(pp);setHist(addHP(l,p.hi));if(!p.limitedData)saveDataCache(l,p);setStep("dashboard")}catch(e){var cached=loadDataCache(l);if(cached&&cached.rounds&&cached.rounds.length){setData({name:cached.name,hi:cached.hi,rounds:cached.rounds,source:"cache",stale:true,staleDate:new Date(cached.ts).toLocaleDateString("es-ES"),staleReason:e.message});setHist(loadHistory(l));setStep("dashboard")}else{setErr(e.message);setStep("home")}}};
@@ -937,9 +955,13 @@ function App(){
   var estHist=data&&data.rounds?estimateHIHistory(data.rounds):[];
   var chartHist=estHist.length>=2?estHist:hist;
 
+  var glassBg="linear-gradient(180deg,"+C.glassSheen+",rgba(255,255,255,0) 55%),"+C.glass;
+  var glassShadowFull="0 14px 34px "+C.glassShadow+", inset 0 1px 1px rgba(255,255,255,0.75), inset 0 -1px 1px rgba(0,0,0,0.12), inset 0 0.5px 0 rgba(255,255,255,0.85)";
+  var tabsPillStyle=mob?(tabsCompact?{position:"fixed",left:"50%",bottom:"calc(10px + env(safe-area-inset-bottom))",transform:"translateX(-50%)",zIndex:150,justifyContent:"center",gap:"14px",margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",padding:"9px 18px",overflowX:"visible",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"}:{position:"fixed",left:"10px",right:"10px",bottom:"calc(10px + env(safe-area-inset-bottom))",zIndex:150,justifyContent:"space-between",gap:"2px",margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",padding:"8px 10px",overflowX:"auto",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"}):{justifyContent:"center",marginBottom:"20px"};
+
   return(<div style={{minHeight:"100vh",background:C.bg}}>
     <Header onHome={step!=="home"?goHome:null} paper={paper} onTogglePaper={togglePaper}/>
-    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px 84px":"36px 20px"}}>
+    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px 100px":"36px 20px"}}>
 
     {step==="home"?<div className="fade-in">
       <div style={{textAlign:"center",marginBottom:"32px"}}><div style={{marginBottom:"14px",display:"flex",justifyContent:"center"}}><Logo size={64} full={true}/></div><h1 style={{fontSize:mob?"24px":"30px",margin:"0 0 8px",fontWeight:"800",fontFamily:"'Space Grotesk',sans-serif",color:C.white,letterSpacing:"0.02em"}}>HCAPP</h1><p style={{color:C.dim,fontSize:"13px"}}>Selecciona un jugador o introduce una nueva licencia</p></div>
@@ -1033,13 +1055,13 @@ function App(){
         </div>
       })()}
 
-      <div className="tabs" style={mob?{position:"fixed",left:0,right:0,bottom:0,zIndex:150,justifyContent:"space-between",margin:0,background:C.green,borderTop:"1px solid "+C.border,padding:"8px 14px calc(8px + env(safe-area-inset-bottom))",overflowX:"visible"}:{justifyContent:"center",marginBottom:"20px"}}>
+      <div className="tabs" style={tabsPillStyle}>
         {[{id:"evo",name:"evo",label:"Evolucion",needsRounds:false},{id:"campos",name:"campos",label:"Campos",needsRounds:true},{id:"goal",name:"goal",label:"Objetivo",needsRounds:false},{id:"hcpj",name:"hcpj",label:"HCP Juego"},{id:"rondas",name:"rondas",label:"Rondas",needsRounds:true},{id:"sim",name:"sim",label:"Simulador",needsRounds:true}].filter(function(t){return !data.limitedData||!t.needsRounds}).map(function(t){
           var active=tab===t.id;
           var inactiveColor=C.dimStrong;
           return<button key={t.id} onClick={function(){setTab(t.id)}} style={{background:"transparent",border:"none",padding:"6px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"4px",minWidth:mob?"auto":"58px",flexShrink:0}}>
             <TabIcon name={t.name} color={active?C.white:inactiveColor} size={19}/>
-            <span style={{fontSize:"10.5px",letterSpacing:"0.01em",color:active?C.white:inactiveColor,fontFamily:"'Space Grotesk',sans-serif",fontWeight:active?"600":"500",borderBottom:active?"2px solid "+C.accent:"2px solid transparent",paddingBottom:"3px"}}>{t.label}</span>
+            {mob&&tabsCompact?null:<span style={{fontSize:"10.5px",letterSpacing:"0.01em",color:active?C.white:inactiveColor,fontFamily:"'Space Grotesk',sans-serif",fontWeight:active?"600":"500",borderBottom:active?"2px solid "+C.accent:"2px solid transparent",paddingBottom:"3px"}}>{t.label}</span>}
           </button>
         })}
       </div>
