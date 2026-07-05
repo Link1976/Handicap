@@ -957,11 +957,12 @@ function App(){
 
   var glassBg="linear-gradient(180deg,"+C.glassSheen+",rgba(255,255,255,0) 55%),"+C.glass;
   var glassShadowFull="0 14px 34px "+C.glassShadow+", inset 0 1px 1px rgba(255,255,255,0.75), inset 0 -1px 1px rgba(0,0,0,0.12), inset 0 0.5px 0 rgba(255,255,255,0.85)";
-  var tabsPillStyle=mob?(tabsCompact?{position:"fixed",left:"50%",bottom:"calc(10px + env(safe-area-inset-bottom))",transform:"translateX(-50%)",zIndex:150,justifyContent:"center",gap:"14px",margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",padding:"9px 18px",overflowX:"visible",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"}:{position:"fixed",left:"10px",right:"10px",bottom:"calc(10px + env(safe-area-inset-bottom))",zIndex:150,justifyContent:"space-between",gap:"2px",margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",padding:"8px 10px",overflowX:"auto",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"}):{justifyContent:"center",marginBottom:"20px"};
+  var tabsPillBase={position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(24px + env(safe-area-inset-bottom))",zIndex:150,margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"};
+  var tabsPillStyle=mob?(tabsCompact?Object.assign({},tabsPillBase,{justifyContent:"center",gap:"14px",padding:"9px 18px",overflowX:"visible"}):Object.assign({},tabsPillBase,{width:"calc(100% - 20px)",justifyContent:"space-between",gap:"2px",padding:"8px 10px",overflowX:"auto"})):{justifyContent:"center",marginBottom:"20px"};
 
   return(<div style={{minHeight:"100vh",background:C.bg}}>
     <Header onHome={step!=="home"?goHome:null} paper={paper} onTogglePaper={togglePaper}/>
-    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px 100px":"36px 20px"}}>
+    <div style={{maxWidth:"1000px",margin:"0 auto",padding:mob?"20px 14px 114px":"36px 20px"}}>
 
     {step==="home"?<div className="fade-in">
       <div style={{textAlign:"center",marginBottom:"32px"}}><div style={{marginBottom:"14px",display:"flex",justifyContent:"center"}}><Logo size={64} full={true}/></div><h1 style={{fontSize:mob?"24px":"30px",margin:"0 0 8px",fontWeight:"800",fontFamily:"'Space Grotesk',sans-serif",color:C.white,letterSpacing:"0.02em"}}>HCAPP</h1><p style={{color:C.dim,fontSize:"13px"}}>Selecciona un jugador o introduce una nueva licencia</p></div>
