@@ -926,17 +926,19 @@ function App(){
 
   useEffect(function(){var fn=function(){setMob(window.innerWidth<700)};window.addEventListener("resize",fn);return function(){window.removeEventListener("resize",fn)}},[]);
   useEffect(function(){
-    var lastY=window.scrollY,ticking=false,upAccum=0;
+    var lastY=window.scrollY,lastT=performance.now(),ticking=false;
+    var FAST_UP_PX_PER_MS=0.6; // "scroll rapido" hacia arriba necesario para expandir
     var onScroll=function(){
       if(ticking)return;
       ticking=true;
       setTimeout(function(){
-        var y=window.scrollY,diff=y-lastY;
-        if(y<40){setTabsCompact(false);upAccum=0}
-        else if(diff>6){setTabsCompact(true);upAccum=0}
-        else if(diff<0){upAccum+=-diff;if(upAccum>140)setTabsCompact(false)}
-        else{upAccum=0}
-        lastY=y;ticking=false;
+        var y=window.scrollY,t=performance.now();
+        var diff=y-lastY,dt=Math.max(t-lastT,1);
+        var velocity=diff/dt; // px/ms; negativo = hacia arriba
+        if(y<40)setTabsCompact(false);
+        else if(diff>6)setTabsCompact(true);
+        else if(velocity<-FAST_UP_PX_PER_MS)setTabsCompact(false);
+        lastY=y;lastT=t;ticking=false;
       },30);
     };
     window.addEventListener("scroll",onScroll,{passive:true});
