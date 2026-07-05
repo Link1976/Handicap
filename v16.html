@@ -23,6 +23,9 @@ input[type=number]{-moz-appearance:textfield}
 .fade-in{animation:fadeIn 0.3s ease-out}
 .tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .tabs::-webkit-scrollbar{display:none}
+@media (prefers-reduced-transparency: reduce){
+  .tabs{background:var(--pillSolid) !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}
+}
 </style>
 </head>
 <body>
@@ -383,8 +386,8 @@ function extractPage1Data(t) {
 // los C.xxx actuales en cada render. lbl()/inp() son funciones (no objetos estaticos) por el mismo motivo:
 // deben leer los colores vigentes en el momento de renderizar, no los que habia al cargar el modulo.
 var THEMES={
-  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3",pillBorder:"#F5D400",glass:"rgba(255,255,255,0.05)",glassSheen:"rgba(255,255,255,0.14)",glassBorder:"rgba(255,255,255,0.32)",glassShadow:"rgba(0,0,0,0.35)"},
-  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38",pillBorder:"#046A38",glass:"rgba(255,255,255,0.1)",glassSheen:"rgba(255,255,255,0.4)",glassBorder:"rgba(255,255,255,0.55)",glassShadow:"rgba(27,42,33,0.15)"}
+  dark:{bg:"#046A38",green:"#063422",gl:"#0a4a30",gold:"#9fb3a5",gd:"rgba(159,179,165,0.85)",white:"#F4F1E9",dim:"#9fb3a5",dimStrong:"#c3d2c8",dimmer:"rgba(232,223,195,0.2)",card:"rgba(244,241,233,0.02)",border:"rgba(232,223,195,0.35)",good:"#CFE8D8",bad:"#E2A98F",blue:"#6FA8C9",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#F5D400",inputBg:"rgba(244,241,233,0.05)",contour:"#E8DFC3",pillBorder:"#F5D400",glass:"rgba(255,255,255,0.01)",glassSheen:"rgba(255,255,255,0.06)",glassBorder:"rgba(255,255,255,0.24)",glassShadow:"rgba(0,0,0,0.35)"},
+  paper:{bg:"#F3EEDD",green:"#e8e0c6",gl:"#ece4cc",gold:"#7d8a7c",gd:"rgba(125,138,124,0.9)",white:"#1B2A21",dim:"#7d8a7c",dimStrong:"#3f4c42",dimmer:"rgba(27,42,33,0.15)",card:"rgba(27,42,33,0.02)",border:"#ddd4b8",good:"#046A38",bad:"#B65B45",blue:"#3E7B95",accent:"#F5D400",flagRed:"#B23A2E",heroTrend:"#046A38",inputBg:"rgba(27,42,33,0.04)",contour:"#046A38",pillBorder:"#046A38",glass:"rgba(255,255,255,0.03)",glassSheen:"rgba(255,255,255,0.2)",glassBorder:"rgba(255,255,255,0.45)",glassShadow:"rgba(27,42,33,0.15)"}
 };
 var C=Object.assign({},THEMES.dark);
 function applyTheme(paper){Object.assign(C,paper?THEMES.paper:THEMES.dark)}
@@ -959,7 +962,7 @@ function App(){
 
   var glassBg="linear-gradient(180deg,"+C.glassSheen+",rgba(255,255,255,0) 55%),"+C.glass;
   var glassShadowFull="0 14px 34px "+C.glassShadow+", inset 0 1px 1px rgba(255,255,255,0.75), inset 0 -1px 1px rgba(0,0,0,0.12), inset 0 0.5px 0 rgba(255,255,255,0.85)";
-  var tabsPillBase={position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(24px + env(safe-area-inset-bottom))",zIndex:150,margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(200%)",WebkitBackdropFilter:"blur(18px) saturate(200%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)"};
+  var tabsPillBase={position:"fixed",left:"50%",transform:"translateX(-50%)",bottom:"calc(24px + env(safe-area-inset-bottom))",zIndex:150,margin:0,background:glassBg,backdropFilter:"blur(18px) saturate(120%)",WebkitBackdropFilter:"blur(18px) saturate(120%)",border:"1px solid "+C.glassBorder,borderRadius:"999px",boxShadow:glassShadowFull,transition:"all 0.35s cubic-bezier(0.4,0,0.2,1)","--pillSolid":C.green};
   var tabsPillStyle=mob?(tabsCompact?Object.assign({},tabsPillBase,{justifyContent:"center",gap:"14px",padding:"9px 18px",overflowX:"visible"}):Object.assign({},tabsPillBase,{width:"calc(100% - 20px)",justifyContent:"space-between",gap:"2px",padding:"8px 10px",overflowX:"auto"})):{justifyContent:"center",marginBottom:"20px"};
 
   return(<div style={{minHeight:"100vh",background:C.bg}}>
