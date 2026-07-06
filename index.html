@@ -524,8 +524,72 @@ function HIChart(p){
 
 function RoundRow(p){
   var r=p.round,u=p.isUsed,n=p.rowLabel,m=p.mob;var d=r.differential;var c=d<=15?C.good:d<=22?C.gold:C.bad;
-  if(m)return(<div style={{padding:"10px 12px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"10px",marginBottom:"4px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}><div style={{display:"flex",alignItems:"center",gap:"6px",flex:1,minWidth:0}}><span style={{color:C.dimmer,fontSize:"10px",fontFamily:"'JetBrains Mono',monospace"}}>#{n}</span><span style={{color:C.white,fontSize:"12px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.course||r.tournament||"\u2014"}</span></div><div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><span style={{color:c,fontWeight:"600",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{d.toFixed(1)}</span><span style={{fontSize:"12px"}}>{u?"\u2B50":""}</span></div></div><div style={{display:"flex",gap:"12px",fontSize:"10px",fontFamily:"'JetBrains Mono',monospace",color:C.dim}}><span>{r.date}</span><span>CR {r.cr}</span><span>SLP {r.slope}</span><span>STB {r.stb}</span></div></div>);
-  return(<div style={{display:"grid",gridTemplateColumns:"32px 2fr 1fr 60px 60px 55px 65px 28px",gap:"6px",alignItems:"center",padding:"9px 14px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"8px",marginBottom:"3px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",fontSize:"12px",fontFamily:"'JetBrains Mono',monospace"}}><span style={{color:C.dimmer,fontSize:"10px"}}>#{n}</span><div style={{overflow:"hidden"}}><div style={{color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:"11px",fontWeight:"500"}}>{r.course||r.tournament||"\u2014"}</div><div style={{color:C.dim,fontSize:"9px",marginTop:"2px"}}>{r.course?r.tournament:""}</div></div><div style={{color:C.dimmer,fontSize:"10px",textAlign:"center"}}>{r.date}</div><span style={{color:C.dim,textAlign:"center"}}>{r.cr||"\u2014"}</span><span style={{color:C.dim,textAlign:"center"}}>{r.slope||"\u2014"}</span><span style={{color:C.white,textAlign:"center"}}>{r.stb||"\u2014"}</span><span style={{color:c,fontWeight:"600",textAlign:"center"}}>{d.toFixed(1)}</span><span style={{textAlign:"center",fontSize:"14px"}}>{u?"\u2B50":""}</span></div>)
+  var click=p.onClick;
+  if(m)return(<div onClick={click} style={{padding:"10px 12px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"10px",marginBottom:"4px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",cursor:click?"pointer":"default"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}><div style={{display:"flex",alignItems:"center",gap:"6px",flex:1,minWidth:0}}><span style={{color:C.dimmer,fontSize:"10px",fontFamily:"'JetBrains Mono',monospace"}}>#{n}</span><span style={{color:C.white,fontSize:"12px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.course||r.tournament||"\u2014"}</span></div><div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><span style={{color:c,fontWeight:"600",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{d.toFixed(1)}</span><span style={{fontSize:"12px"}}>{u?"\u2B50":""}</span></div></div><div style={{display:"flex",gap:"12px",fontSize:"10px",fontFamily:"'JetBrains Mono',monospace",color:C.dim}}><span>{r.date}</span><span>CR {r.cr}</span><span>SLP {r.slope}</span><span>STB {r.stb}</span></div></div>);
+  return(<div onClick={click} style={{display:"grid",gridTemplateColumns:"32px 2fr 1fr 60px 60px 55px 65px 28px",gap:"6px",alignItems:"center",padding:"9px 14px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"8px",marginBottom:"3px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",cursor:click?"pointer":"default"}}><span style={{color:C.dimmer,fontSize:"10px"}}>#{n}</span><div style={{overflow:"hidden"}}><div style={{color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:"11px",fontWeight:"500"}}>{r.course||r.tournament||"\u2014"}</div><div style={{color:C.dim,fontSize:"9px",marginTop:"2px"}}>{r.course?r.tournament:""}</div></div><div style={{color:C.dimmer,fontSize:"10px",textAlign:"center"}}>{r.date}</div><span style={{color:C.dim,textAlign:"center"}}>{r.cr||"\u2014"}</span><span style={{color:C.dim,textAlign:"center"}}>{r.slope||"\u2014"}</span><span style={{color:C.white,textAlign:"center"}}>{r.stb||"\u2014"}</span><span style={{color:c,fontWeight:"600",textAlign:"center"}}>{d.toFixed(1)}</span><span style={{textAlign:"center",fontSize:"14px"}}>{u?"\u2B50":""}</span></div>)
+}
+
+// Texto de resumen de una ronda, usado tanto para Web Share API como para el fallback de portapapeles
+function roundShareText(r,isUsed,rowLabel,playerName){
+  var lines=[];
+  lines.push("\u26F3 "+(r.course||r.tournament||"Ronda")+" \u2014 "+(r.date||""));
+  if(playerName)lines.push(playerName);
+  lines.push("Diferencial: "+r.differential.toFixed(1)+(isUsed?" \u2B50 computa":""));
+  lines.push("CR "+(r.cr||"\u2014")+" \u00B7 Slope "+(r.slope||"\u2014")+" \u00B7 Stableford "+(r.stb||"\u2014"));
+  if(r.hcp_juego!=null)lines.push("HCP de juego: "+r.hcp_juego);
+  if(rowLabel)lines.push("Ronda #"+rowLabel);
+  lines.push("\u2014 HCAPP");
+  return lines.join("\n");
+}
+
+function RoundDetailModal(p){
+  var r=p.round,u=p.isUsed;
+  var _copied=useState(false),copied=_copied[0],setCopied=_copied[1];
+  var _err=useState(""),shErr=_err[0],setShErr=_err[1];
+  var d=r.differential;var c=d<=15?MODAL_C.good:d<=22?MODAL_C.gold:MODAL_C.bad;
+  var text=roundShareText(r,u,p.rowLabel,p.playerName);
+  var doShare=async function(){
+    setShErr("");
+    if(navigator.share){
+      try{await navigator.share({title:"Ronda de golf",text:text});return}catch(e){if(e&&e.name==="AbortError")return}
+    }
+    try{
+      await navigator.clipboard.writeText(text);
+      setCopied(true);setTimeout(function(){setCopied(false)},2000);
+    }catch(e){setShErr("No se pudo compartir ni copiar")}
+  };
+  var metric=function(label,val){return<div style={{textAlign:"center",padding:"10px 6px",background:"rgba(255,255,255,0.03)",borderRadius:"8px"}}><div style={{fontSize:"16px",fontFamily:"'JetBrains Mono',monospace",color:MODAL_C.white,fontWeight:"600"}}>{val!=null?val:"\u2014"}</div><div style={{fontSize:"9px",color:MODAL_C.dim,letterSpacing:"1px",marginTop:"3px"}}>{label}</div></div>};
+  return(<div onClick={p.onClose} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+    <div onClick={function(e){e.stopPropagation()}} style={{background:MODAL_C.bg,border:"1px solid "+MODAL_C.border,borderRadius:"20px",padding:"26px",maxWidth:"420px",width:"100%",maxHeight:"90vh",overflowY:"auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px",gap:"10px"}}>
+        <div style={{minWidth:0}}>
+          <h2 style={{margin:0,fontSize:"17px",color:MODAL_C.white,fontWeight:"600",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.course||r.tournament||"Ronda"}</h2>
+          {r.course&&r.tournament?<div style={{fontSize:"11px",color:MODAL_C.dim,marginTop:"2px"}}>{r.tournament}</div>:null}
+        </div>
+        <button onClick={p.onClose} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:"6px",color:MODAL_C.dim,padding:"4px 10px",cursor:"pointer",fontSize:"16px",flexShrink:0}}>{"\u00D7"}</button>
+      </div>
+      <div style={{fontSize:"11px",color:MODAL_C.dim,fontFamily:"'JetBrains Mono',monospace",marginBottom:"18px"}}>{r.date}{p.rowLabel?" \u00B7 Ronda #"+p.rowLabel:""}</div>
+
+      <div style={{textAlign:"center",marginBottom:"18px",padding:"16px",background:"rgba(255,255,255,0.03)",borderRadius:"12px"}}>
+        <div style={{fontSize:"9px",color:MODAL_C.dim,letterSpacing:"2px",marginBottom:"4px"}}>DIFERENCIAL</div>
+        <div style={{fontSize:"36px",fontFamily:"'JetBrains Mono',monospace",color:c,fontWeight:"700",lineHeight:1}}>{d.toFixed(1)}</div>
+        {u?<div style={{fontSize:"11px",color:MODAL_C.gold,marginTop:"6px"}}>{"\u2B50"} Computa para el HI</div>:null}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px",marginBottom:"10px"}}>
+        {metric("CR",r.cr)}
+        {metric("SLOPE",r.slope)}
+        {metric("ASC",r.asc)}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"20px"}}>
+        {metric("STABLEFORD",r.stb)}
+        {metric("HCP JUEGO",r.hcp_juego)}
+      </div>
+
+      {shErr?<div style={{fontSize:"11px",color:MODAL_C.bad,marginBottom:"10px",textAlign:"center"}}>{shErr}</div>:null}
+      <button onClick={doShare} style={{width:"100%",background:copied?"rgba(93,184,112,0.2)":"rgba(232,223,195,0.15)",border:"1px solid "+(copied?"rgba(93,184,112,0.4)":"rgba(232,223,195,0.3)"),borderRadius:"10px",color:copied?MODAL_C.good:MODAL_C.gold,padding:"12px",cursor:"pointer",fontSize:"13px",fontFamily:"'JetBrains Mono',monospace"}}>{copied?"\u2714 COPIADO AL PORTAPAPELES":"COMPARTIR RONDA"}</button>
+    </div>
+  </div>)
 }
 
 function HIGoal(p){
@@ -921,6 +985,7 @@ function App(){
   var _tab=useState("evo"),tab=_tab[0],setTab=_tab[1];
   var _showLogin=useState(false),showLogin=_showLogin[0],setShowLogin=_showLogin[1];
   var _shareErr=useState(""),shareErr=_shareErr[0],setShareErr=_shareErr[1];
+  var _selRound=useState(null),selRound=_selRound[0],setSelRound=_selRound[1];
   var _paper=useState(loadPaperMode()),paper=_paper[0],setPaper=_paper[1];
   applyTheme(paper); // C es mutable: releer el tema vigente en cada render de App, antes de construir el arbol
   var togglePaper=function(){var n=!paper;savePaperMode(n);setPaper(n)};
@@ -1090,8 +1155,10 @@ function App(){
 
       {tab==="rondas"?<Card style={{marginBottom:"20px"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}><h2 style={{margin:0,fontSize:"16px",color:C.white,fontWeight:"600"}}>Ultimas {last20.length} Rondas</h2><span style={{fontSize:"9px",color:C.dim}}>{"\u2B50"} = computa</span></div><div style={{fontSize:"11px",color:C.dim,marginBottom:"12px"}}>Los <span style={{color:C.gold}}>{usedSet.size} mejores</span> de {last20.length}</div>
         {!mob?<div><div style={{display:"grid",gridTemplateColumns:"32px 2fr 1fr 60px 60px 55px 65px 28px",gap:"6px",padding:"5px 14px",fontSize:"9px",letterSpacing:"2px",color:C.dim}}><span>#</span><span>CAMPO</span><span style={{textAlign:"center"}}>FECHA</span><span style={{textAlign:"center"}}>CR</span><span style={{textAlign:"center"}}>SLP</span><span style={{textAlign:"center"}}>STB</span><span style={{textAlign:"center"}}>DIF.</span><span/></div></div>:null}
-        {(function(){var rev=last20.slice().reverse();var ds=showAll?rev:rev.slice(0,10);return<div>{ds.map(function(r,i){var idx=last20.length-1-i;return<RoundRow key={i} round={r} isUsed={usedSet.has(idx)} rowLabel={data.rounds.length-i} mob={mob}/>})}{last20.length>10?<button onClick={function(){setSA(!showAll)}} style={{marginTop:"8px",width:"100%",background:"transparent",border:"1px solid "+C.border,color:C.dim,borderRadius:"8px",padding:"10px",cursor:"pointer",fontSize:"12px"}}>{showAll?"MENOS":"VER "+last20.length}</button>:null}</div>})()}
+        {(function(){var rev=last20.slice().reverse();var ds=showAll?rev:rev.slice(0,10);return<div>{ds.map(function(r,i){var idx=last20.length-1-i;var label=data.rounds.length-i;var used=usedSet.has(idx);return<RoundRow key={i} round={r} isUsed={used} rowLabel={label} mob={mob} onClick={function(){setSelRound({round:r,isUsed:used,rowLabel:label})}}/>})}{last20.length>10?<button onClick={function(){setSA(!showAll)}} style={{marginTop:"8px",width:"100%",background:"transparent",border:"1px solid "+C.border,color:C.dim,borderRadius:"8px",padding:"10px",cursor:"pointer",fontSize:"12px"}}>{showAll?"MENOS":"VER "+last20.length}</button>:null}</div>})()}
       </Card>:null}
+
+      {selRound?<RoundDetailModal round={selRound.round} isUsed={selRound.isUsed} rowLabel={selRound.rowLabel} playerName={data.name} onClose={function(){setSelRound(null)}}/>:null}
 
       {tab==="sim"?<Simulator rounds={data.rounds} hi={hi}/>:null}
 
