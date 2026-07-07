@@ -1,1 +1,6 @@
-__pycache__/\n*.pyc\n.env\nnode_modules/
+__pycache__/
+*.pyc
+.env
+node_modules/
+.wrangler/
+.claude/
