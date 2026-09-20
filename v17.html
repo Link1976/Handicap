@@ -920,18 +920,18 @@ function DefensePlan(p){
       </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:cols,gap:"6px",padding:"0 10px 6px",fontSize:"8.5px",letterSpacing:"1.5px",color:C.dim,borderBottom:"1px solid "+C.border,marginBottom:"6px",fontFamily:mono}}>
-      <span>HACIENDO</span><span style={{textAlign:"right"}}>DIF. MAX</span>{hasCourse?<span style={{textAlign:"right"}}>GOLPES</span>:null}
+      <span>HACIENDO</span><span style={{textAlign:"right"}}>DIFERENCIAL</span>{hasCourse?<span style={{textAlign:"right"}}>GOLPES</span>:null}
     </div>
     {plan.paths.map(function(pt,i){
       var g=hasCourse?diffToGross(pt.diff,crV,slV,ascV):null;
       return<div key={pt.k} style={{display:"grid",gridTemplateColumns:cols,gap:"6px",alignItems:"center",padding:"8px 10px",borderRadius:"8px",background:i===0?C.card:"transparent",marginBottom:"3px"}}>
         <span style={{fontSize:"12.5px",color:C.white,fontWeight:i===0?"600":"400"}}>{kLabel(pt.k)}</span>
-        <span style={{fontFamily:mono,fontSize:"14px",color:C.good,textAlign:"right",fontWeight:"600"}}>{pt.diff.toFixed(1)}</span>
-        {hasCourse?<span style={{fontFamily:mono,fontSize:"14px",color:C.white,textAlign:"right"}}>{g!=null?g:"—"}</span>:null}
+        <span style={{fontFamily:mono,fontSize:"14px",color:C.good,textAlign:"right",fontWeight:"600"}}>≤ {pt.diff.toFixed(1)}</span>
+        {hasCourse?<span style={{fontFamily:mono,fontSize:"14px",color:C.white,textAlign:"right"}}>{g!=null?"≤ "+g:"—"}</span>:null}
       </div>
     })}
     <div style={{fontSize:"10px",color:C.dim,marginTop:"9px",lineHeight:"1.5"}}>
-      Ese diferencial <strong style={{color:C.white}}>o mejor</strong>. {h===1?"No hay margen: o la defiendes en la proxima, o subes.":<span>Son caminos alternativos: con cumplir <strong style={{color:C.white}}>uno</strong> basta.</span>} Supone que las demas rondas no entran entre tus 8 mejores.
+      Diferencial mas bajo = mejor ronda. {h===1?"No hay margen: o la defiendes en la proxima, o subes.":<span>Son caminos alternativos: con cumplir <strong style={{color:C.white}}>uno</strong> basta.</span>} Supone que las demas rondas no entran entre tus 8 mejores.
     </div>
     {!hasCourse?<div style={{fontSize:"10px",color:C.dim,marginTop:"6px",fontStyle:"italic"}}>Elige un campo abajo para ver a cuantos golpes equivale cada diferencial.</div>:null}
   </div>)
