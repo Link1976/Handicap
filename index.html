@@ -35,9 +35,26 @@ input[type=number]{-moz-appearance:textfield}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script type="text/babel">
 
-var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useCallback=React.useCallback;
+var useState=React.useState,useEffect=React.useEffect,useRef=React.useRef,useCallback=React.useCallback,useMemo=React.useMemo;
 var RFEG_URL="https://api.rfeg.es/files/summaryhandicap/";
 var COURSES_API="https://rfeg-courses.alberto76.workers.dev";
+
+// Sin timeout, un worker que no responde deja el fetch esperando indefinidamente y la app se queda
+// en "Conectando..." sin decir nada: parece rota por dentro cuando en realidad es la red. Con
+// AbortController el fallo se convierte en un mensaje claro y acotado en el tiempo.
+var NET_TIMEOUT_MS=15000;
+function fetchT(url,opts,ms){
+  var ctrl=new AbortController();
+  var t=setTimeout(function(){ctrl.abort()},ms||NET_TIMEOUT_MS);
+  return fetch(url,Object.assign({},opts||{},{signal:ctrl.signal})).then(function(r){
+    clearTimeout(t);return r;
+  },function(e){
+    clearTimeout(t);
+    if(e&&e.name==="AbortError")throw new Error("No se puede conectar con el servidor (sin respuesta en "+Math.round((ms||NET_TIMEOUT_MS)/1000)+"s). Comprueba tu conexion e intentalo de nuevo.");
+    throw new Error("Error de red: no se pudo contactar con el servidor.");
+  });
+}
+
 
 // Known federated ID mappings (bootstrapped, user can add more; user-added persist in localStorage)
 var BOOT_FED_IDS={"503218":"26291","995317":"330075","924203":"328208"};
@@ -155,6 +172,61 @@ function simulateNextRound(rounds, gross, cr, slope, asc, overrideDiff) {
   const newComputes = bestSet.has(window20.length - 1);
   return { newHandicap: newHI, differential: newDiff, computes: newComputes };
 }
+
+// --- Plan de defensa del HI ---------------------------------------------------------------
+// Las rondas salen de la ventana en orden cronologico: la de indice i sale cuando juegas i+1
+// rondas mas. Mientras la que sale no este entre las 8 mejores, perderla no puede subir el HI.
+// El unico momento de riesgo es cuando cae una que SI computa: ahi asciende la 9a mejor y el HI
+// sube. calcDefensePlan localiza esa primera caida dolorosa y responde a "que tengo que hacer
+// para que mi HI no suba antes de que llegue": para cada numero de rondas k, el diferencial
+// maximo que hay que repetir k veces para aguantar. Las rondas restantes del horizonte se
+// suponen malas, asi que cada camino es un minimo garantizado, no una prediccion.
+var DEFENSE_BAD_DIFF = 60;   // peor que cualquier diferencial real: nunca entra en las 8 mejores
+function diffToGross(diff, cr, slope, asc) {
+  if (!cr || !slope) return null;
+  var a = asc || 0;
+  var g = Math.floor(cr + a + diff * slope / 113);
+  // El diferencial se redondea a 1 decimal, asi que el golpe entero justo puede pasarse por poco:
+  // baja hasta encontrar el mayor entero cuyo diferencial redondeado no supere el objetivo.
+  for (var i = 0; i < 4; i++) {
+    if (Math.round(((g - cr - a) * 113 / slope) * 10) / 10 <= diff) return g;
+    g--;
+  }
+  return g;
+}
+function calcDefensePlan(rounds) {
+  if (!rounds || rounds.length < 20) return null;          // ventana incompleta: aun no sale nadie
+  var w = rounds.slice(-20);
+  var best = getBestIndices(w);
+  var idx = -1;
+  for (var i = 0; i < w.length; i++) { if (best.has(i)) { idx = i; break } }
+  if (idx < 0) return null;
+  var hiNow = calcHandicapIndex(w);
+  if (hiNow == null) return null;
+  var horizon = idx + 1;                                    // rondas que faltan para esa caida
+  var survivors = w.slice(horizon).map(function (r) { return { differential: r.differential } });
+  var pad = function (n) { var o = []; for (var j = 0; j < n; j++) o.push({ differential: DEFENSE_BAD_DIFF }); return o };
+  var hiIf = function (k, t) {
+    var extra = []; for (var j = 0; j < k; j++) extra.push({ differential: t });
+    return calcHandicapIndex(survivors.concat(extra, pad(horizon - k)));
+  };
+  var ks = [];
+  for (var k = 1; k <= horizon; k++) { if (k <= 3 || k === horizon) ks.push(k) }
+  var paths = [];
+  ks.forEach(function (k) {
+    // El HI crece de forma monotona con t, asi que basta subir hasta que deje de aguantar.
+    var maxT = null;
+    for (var t = 0; t <= 54.01; t = Math.round((t + 0.1) * 10) / 10) {
+      var h = hiIf(k, t);
+      if (h != null && h <= hiNow) maxT = t; else break;
+    }
+    // Si exigir mas rondas no relaja el listado (el grupo de las 8 mejores se satura), ese camino
+    // no aporta nada: no lo mostramos para no repetir la misma cifra.
+    if (maxT != null && (!paths.length || maxT > paths[paths.length - 1].diff)) paths.push({ k: k, diff: maxT });
+  });
+  return { horizon: horizon, outgoing: w[idx], hiNow: hiNow, hiDoNothing: calcHandicapIndex(survivors.concat(pad(horizon))), paths: paths };
+}
+
 var getTC=getTakeCount,calcHI=calcHandicapIndex,getBest=getBestIndices;
 function simRound(rds,g,cr,sl,asc,overrideDiff){var r=simulateNextRound(rds,g,cr,sl,asc,overrideDiff);return{nh:r.newHandicap,df:r.differential,cp:r.computes}}
 
@@ -221,7 +293,7 @@ async function fetchParse(lic,onM){
   // Intento 1: PDF via api.rfeg.es (public, works for any license)
   onM("Conectando con la RFEG...");
   try{
-    var r1=await fetch(COURSES_API+"/?pdf="+lic,{mode:"cors"});
+    var r1=await fetchT(COURSES_API+"/?pdf="+lic,{mode:"cors"});
     if(r1.ok){var b1=await r1.blob();if(await isPdfBlob(b1)){blob=b1}else{errLog.push("PDF publico: no PDF ("+b1.size+"b)")}}
     else{errLog.push("PDF publico: HTTP "+r1.status)}
   }catch(e1){errLog.push("PDF publico: "+e1.message)}
@@ -230,7 +302,7 @@ async function fetchParse(lic,onM){
   if(!blob&&creds&&fedId){
     onM("Descargando datos autenticados...");
     try{
-      var r2=await fetch(COURSES_API+"/?auth_pdf="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
+      var r2=await fetchT(COURSES_API+"/?auth_pdf="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
       if(r2.ok){
         var ct=r2.headers.get("content-type")||"";
         if(ct.includes("pdf")){var b2=await r2.blob();if(await isPdfBlob(b2)){blob=b2}else{errLog.push("Auth PDF: no valido")}}
@@ -259,7 +331,7 @@ async function fetchParse(lic,onM){
   if(creds&&fedId){
     onM("Obteniendo handicap actual...");
     try{
-      var r3=await fetch(COURSES_API+"/?auth_handicap="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
+      var r3=await fetchT(COURSES_API+"/?auth_handicap="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
       if(r3.ok){hiOnly=await r3.json()}
     }catch(e3){errLog.push("HI auth: "+e3.message)}
   }
@@ -268,7 +340,7 @@ async function fetchParse(lic,onM){
   var scores=null;
   if(creds&&fedId){
     try{
-      var r4=await fetch(COURSES_API+"/?auth_scores="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
+      var r4=await fetchT(COURSES_API+"/?auth_scores="+fedId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:creds.u,password:creds.p})});
       if(r4.ok){scores=await r4.json();if(scores.error)scores=null}
     }catch(e4){}
   }
@@ -686,7 +758,7 @@ function CourseSearch(p){
     clearTimeout(timer.current);
     timer.current=setTimeout(function(){
       sLoading(true);
-      fetch(COURSES_API+"/?search="+encodeURIComponent(val))
+      fetchT(COURSES_API+"/?search="+encodeURIComponent(val),null,12000)
         .then(function(r){return r.json()})
         .then(function(d){sRes(d.results||[]);sLoading(false)})
         .catch(function(e){sErr("Error buscando");sLoading(false)})
@@ -695,7 +767,7 @@ function CourseSearch(p){
 
   var selectClub=function(c){
     sClub(c);sRes([]);sQ(c.name);sLoading(true);sErr("");
-    fetch(COURSES_API+"/?club_id="+c.id+"&slug="+c.slug)
+    fetchT(COURSES_API+"/?club_id="+c.id+"&slug="+c.slug,null,12000)
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.tees&&d.tees.length>0){sTees(d.tees.map(function(t){return Object.assign({},t,{recorrido:decU(t.recorrido),tee:decU(t.tee)})}))}
@@ -717,7 +789,7 @@ function CourseSearch(p){
     sQ("");sErr("");
     if(!f.clubId||!f.slug){addFavCourse(f);if(p.onSelect)p.onSelect(f);return}
     sLoading(true);
-    fetch(COURSES_API+"/?club_id="+f.clubId+"&slug="+f.slug)
+    fetchT(COURSES_API+"/?club_id="+f.clubId+"&slug="+f.slug,null,12000)
       .then(function(r){return r.json()})
       .then(function(d){
         sLoading(false);
@@ -817,10 +889,59 @@ function PlayingHCP(p){
   </Card>)
 }
 
+// Bloque "Defender el handicap": vive dentro del Simulador porque comparte el selector de campo
+// (lo unico que necesita del usuario) y porque el Simulador ya es, conceptualmente, "mis proximas
+// rondas". Se calcula solo al entrar: no hace falta pulsar SIMULAR.
+function DefensePlan(p){
+  var plan=p.plan;
+  if(!plan)return null;
+  var crV=parseFloat(p.cr),slV=parseInt(p.sl),ascV=parseInt(p.asc)||0;
+  var hasCourse=!!(crV&&slV);
+  var o=plan.outgoing,h=plan.horizon;
+  var where=o.course||o.tournament||"";
+  var up=plan.hiDoNothing!=null&&plan.hiNow!=null?Math.round((plan.hiDoNothing-plan.hiNow)*10)/10:null;
+  var cols=hasCourse?"1fr 84px 70px":"1fr 110px";
+  var mono="'JetBrains Mono',monospace";
+  var kLabel=function(k){return k===1?"1 ronda":k===h?"las "+k:k+" rondas"};
+  return(<div style={{borderRadius:"14px",padding:"15px 16px",marginBottom:"16px",background:C.inputBg,border:"1px solid "+C.border}}>
+    <div style={{fontSize:"9.5px",letterSpacing:"2px",color:C.dim,marginBottom:"9px",fontFamily:mono}}>DEFENDER EL HANDICAP</div>
+    <div style={{fontSize:"12.5px",color:C.dim,lineHeight:"1.5",marginBottom:"12px"}}>
+      {h===1
+        ?<span>Se cae en tu <strong style={{color:C.white}}>proxima ronda</strong>: </span>
+        :<span>Las <strong style={{color:C.white}}>{h-1}</strong> proximas salidas no computan. La <strong style={{color:C.white}}>{h}{"ª"}</strong> si: </span>}
+      el <span style={{fontFamily:mono,fontWeight:"700",color:C.contour}}>{o.differential.toFixed(1)}</span>
+      {o.date?" del "+o.date:""}{where?" · "+where:""} <span style={{color:C.contour}}>{"⭐"}</span>
+    </div>
+    <div style={{borderRadius:"10px",padding:"10px 12px",border:"1px solid "+C.border,background:C.card,marginBottom:"13px"}}>
+      <div style={{fontSize:"8.5px",letterSpacing:"1.5px",color:C.dim,marginBottom:"3px",fontFamily:mono}}>SI NO HACES NADA BUENO</div>
+      <div style={{fontFamily:mono,fontSize:"16px",fontWeight:"700",color:C.white}}>
+        {plan.hiNow.toFixed(1)} <span style={{color:C.dim,fontWeight:"400"}}>{"→"}</span> {plan.hiDoNothing!=null?plan.hiDoNothing.toFixed(1):"—"}
+        {up?<span style={{color:C.bad,fontSize:"13px"}}> {"▲"} {up.toFixed(1)}</span>:null}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:cols,gap:"6px",padding:"0 10px 6px",fontSize:"8.5px",letterSpacing:"1.5px",color:C.dim,borderBottom:"1px solid "+C.border,marginBottom:"6px",fontFamily:mono}}>
+      <span>HACIENDO</span><span style={{textAlign:"right"}}>DIFERENCIAL</span>{hasCourse?<span style={{textAlign:"right"}}>GOLPES</span>:null}
+    </div>
+    {plan.paths.map(function(pt,i){
+      var g=hasCourse?diffToGross(pt.diff,crV,slV,ascV):null;
+      return<div key={pt.k} style={{display:"grid",gridTemplateColumns:cols,gap:"6px",alignItems:"center",padding:"8px 10px",borderRadius:"8px",background:i===0?C.card:"transparent",marginBottom:"3px"}}>
+        <span style={{fontSize:"12.5px",color:C.white,fontWeight:i===0?"600":"400"}}>{kLabel(pt.k)}</span>
+        <span style={{fontFamily:mono,fontSize:"14px",color:C.good,textAlign:"right",fontWeight:"600"}}>≤ {pt.diff.toFixed(1)}</span>
+        {hasCourse?<span style={{fontFamily:mono,fontSize:"14px",color:C.white,textAlign:"right"}}>{g!=null?"≤ "+g:"—"}</span>:null}
+      </div>
+    })}
+    <div style={{fontSize:"10px",color:C.dim,marginTop:"9px",lineHeight:"1.5"}}>
+      Diferencial mas bajo = mejor ronda. {h===1?"No hay margen: o la defiendes en la proxima, o subes.":<span>Son caminos alternativos: con cumplir <strong style={{color:C.white}}>uno</strong> basta.</span>} Supone que las demas rondas no entran entre tus 8 mejores.
+    </div>
+    {!hasCourse?<div style={{fontSize:"10px",color:C.dim,marginTop:"6px",fontStyle:"italic"}}>Elige un campo abajo para ver a cuantos golpes equivale cada diferencial.</div>:null}
+  </div>)
+}
+
 function Simulator(p){
   var _cr=useState(""),cr=_cr[0],sCr=_cr[1],_sl=useState(""),sl=_sl[0],sSl=_sl[1],_asc=useState("0"),asc=_asc[0],sAsc=_asc[1],_mn=useState("70"),mn=_mn[0],sMn=_mn[1],_mx=useState("105"),mx=_mx[0],sMx=_mx[1],_r=useState([]),res=_r[0],sRes=_r[1];
   var _sel=useState(""),sel=_sel[0],sSel=_sel[1];
   var _nine=useState(false),nine=_nine[0],sNine=_nine[1];
+  var plan=useMemo(function(){return calcDefensePlan(p.rounds)},[p.rounds]);
   var onNineToggle=function(){var n=!nine;sNine(n);if(n){sMn("35");sMx("60")}else{sMn("70");sMx("105")}sRes([])};
   var onCourseSelect=function(d){if(d){sCr(String(d.vc));sSl(String(d.slope));sSel(d.name)}else{sCr("");sSl("");sSel("")}};
   var run=function(){
@@ -850,6 +971,7 @@ function Simulator(p){
   var ci=res.findIndex(function(s,i){return!s.c&&i>0&&res.slice(i).every(function(r){return r.hi===s.hi})});
   var ceil=ci>=0?res[ci]:null;var disp=ceil?res.slice(0,ci):res;
 return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}><TabIcon name="sim" color={C.white} size={20}/><h2 style={{margin:0,fontSize:"17px",color:C.white,fontWeight:"600"}}>Simulador</h2></div>
+    <DefensePlan plan={plan} cr={cr} sl={sl} asc={asc}/>
     <div onClick={onNineToggle} style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px",cursor:"pointer",userSelect:"none"}}>
       <div style={{width:"18px",height:"18px",borderRadius:"4px",border:"1px solid "+(nine?C.good:C.border),background:nine?"rgba(93,184,112,0.25)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         {nine?<span style={{fontSize:"11px",color:C.good}}>{"\u2714"}</span>:null}
@@ -896,7 +1018,7 @@ function LoginModal(p){
     sLoading(true);sErr("");
     try{
       // Test login by fetching own handicap
-      var r=await fetch(COURSES_API+"/?auth_handicap=26291",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,password:pw})});
+      var r=await fetchT(COURSES_API+"/?auth_handicap=26291",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,password:pw})});
       if(!r.ok){var j=await r.json().catch(function(){return{}});throw new Error(j.message||j.error||"Login fallido (HTTP "+r.status+")")}
       // Success - store credentials in memory (and optionally sessionStorage for this tab)
       window._rfegCreds={u:u,p:pw};
