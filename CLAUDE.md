@@ -152,13 +152,15 @@ Los endpoints POST esperan body JSON `{username, password}`.
 
 El cache de tees se deshabilitó porque la RFEG actualiza CR/Slope sin aviso y el cache de 30 días mostraba valores obsoletos.
 
-### Scraping de tees — `parseClubHTML`
+### Búsqueda de clubs y scraping de tees
 
-Parsea `rfegolf.es/club/{slug}?id={clubId}` con dos pasos:
-1. Extrae definiciones de tee de las llamadas `selectWay(nombre, color, género, orden, wayId)`
-2. Para cada tee, localiza su sección HTML mediante el ancla `id="holes_{wayId}"` y extrae el bloque `TOTAL/Vc/Vs` dentro de esa sección
+Desde la migración de rfegolf.es a WordPress (2026) ya no existe el token público `coded_…` ni `api.rfeg.es/web/search/club`.
 
-Los tees sin bloque en su sección (normalmente porque comparten tabla con otro tee) se omiten del resultado. Este enfoque es robusto frente a campos donde el número de bloques no coincide con el número de `selectWay` (problema presente en El Encín, CNG y otros campos de la RFEG).
+- **Búsqueda** (`searchViaWordPress`): API REST de WordPress `rfegolf.es/wp-json/wp/v2/club?search=…`. El `id` devuelto es el ID del post de WordPress; el nombre sale de `yoast_head_json.title`. Clave KV: `wpsearch_<query>`.
+- **Tees** (`parseClubHTML`): parsea `rfegolf.es/club/{slug}` (solo necesita el slug):
+  1. Cada tee es un `<option value="rcpanel_{post}_{recorrido}_{n}">CLUB - Recorrido - TEE (M|F)</option>`
+  2. Su tarjeta está en el panel `id="rcpanel_…"`: Par y Metros = última celda de su fila; `Vc: X` / `Vs: Y` en `.holes-table-footer`
+- Si el slug da 404 (favoritos guardados con slugs antiguos tipo `forus_golf_las_rejas`), se resuelve buscando el slug en la API de WordPress.
 
 ### Autenticación RFEG
 

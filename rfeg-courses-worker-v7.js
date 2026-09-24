@@ -4,7 +4,7 @@
  * 
  * Endpoints:
  *   GET  /?search=rejas                             → Search clubs by name
- *   GET  /?club_id=448&slug=forus_golf_las_rejas    → Get tee data for a club
+ *   GET  /?club_id=12752&slug=golf-los-retamares    → Get tee data for a club
  *   GET  /?pdf=924203                               → Download PDF (public token)
  *   GET  /?player=nombre                            → Search player by name/license (public)
  *   POST /?auth_pdf=26291                           → Login + download PDF via api.rfegolf.es
@@ -210,81 +210,119 @@ async function searchPlayer(query) {
 }
 
 // ─── Search Clubs ───────────────────────────────────────────────────────────
+// rfegolf.es migrated to WordPress (2026). Clubs are a custom post type exposed
+// through the standard WP REST API; the old api.rfeg.es search + coded_ token
+// no longer exist.
+
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 async function searchClubs(query, env) {
-  const cacheKey = `search_${query.toLowerCase().trim()}`;
+  const cacheKey = `wpsearch_${query.toLowerCase().trim()}`;
   if (env?.RFEG_CACHE) {
     const cached = await env.RFEG_CACHE.get(cacheKey);
     if (cached) return JSON.parse(cached);
   }
-  const results = await searchViaRFEGApi(query);
+  const results = await searchViaWordPress(query);
   if (env?.RFEG_CACHE && results.length > 0) {
     await env.RFEG_CACHE.put(cacheKey, JSON.stringify(results), { expirationTtl: SEARCH_CACHE_TTL });
   }
   return results;
 }
 
-async function searchViaRFEGApi(query) {
-  const token = await getFreshToken();
-  const resp = await fetch(`https://api.rfeg.es/web/search/club?q=${encodeURIComponent(query)}`, {
-    headers: { "Authorization": token, "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
-  });
-  if (!resp.ok) throw new Error(`RFEG API error: ${resp.status}`);
+async function searchViaWordPress(query) {
+  const url = `${RFEG_WEB}/wp-json/wp/v2/club?search=${encodeURIComponent(query)}&per_page=20&_fields=id,slug,yoast_head_json.title`;
+  const resp = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "application/json" } });
+  if (!resp.ok) throw new Error(`RFEG search error: ${resp.status}`);
   const body = await resp.json();
-  return (body.data || []).map(c => ({
-    id: parseInt(c.id), name: c.name || "", slug: extractSlug(c.directory?.url || ""),
-    city: c.place || "", community: c.community || "", holes: c.holes || 0,
+  return (Array.isArray(body) ? body : []).map(c => ({
+    id: c.id,
+    name: decodeEntities((c.yoast_head_json?.title || c.slug).replace(/\s*(&#8211;|–|-)\s*RFEG\s*$/i, "")),
+    slug: c.slug,
+    city: "", community: "", holes: 0,
   }));
 }
 
-function extractSlug(url) { const m = url.match(/\/club\/([^?#]+)/); return m ? m[1] : ""; }
+function decodeEntities(s) {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");
+}
 
 // ─── Club Course Data ───────────────────────────────────────────────────────
 
 async function getClubCourses(clubId, slug, env) {
   // Cache disabled: always scrape live to ensure CR/Slope are up to date
-  const data = await scrapeClubPage(clubId, slug);
-  return data;
+  return await scrapeClubPage(clubId, slug);
+}
+
+async function fetchClubHTML(slug) {
+  return fetch(`${RFEG_WEB}/club/${encodeURIComponent(slug)}`, {
+    headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml" },
+    redirect: "follow",
+  });
 }
 
 async function scrapeClubPage(clubId, slug) {
-  const resp = await fetch(`${RFEG_WEB}/club/${slug}?id=${clubId}`, {
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Accept": "text/html,application/xhtml+xml" },
-    redirect: "follow",
-  });
+  let resp = await fetchClubHTML(slug);
+  if (resp.status === 404) {
+    // Favourites saved before the migration carry old-site slugs
+    // (e.g. "forus_golf_las_rejas"). Resolve them via the new search.
+    const hits = await searchViaWordPress(slug.replace(/[-_]+/g, " "));
+    if (hits.length > 0) { slug = hits[0].slug; clubId = hits[0].id; resp = await fetchClubHTML(slug); }
+  }
   if (!resp.ok) throw new Error(`Club page not found: ${resp.status}`);
   return parseClubHTML(await resp.text(), clubId, slug);
 }
 
+// Club page layout (new WordPress site):
+//   <option value="rcpanel_{post}_{course}_{n}">CLUB - Recorrido - TEE (M|F) emoji</option>
+//   <div class="holes-table-panel" id="rcpanel_{post}_{course}_{n}"> scorecard table
+//     rows: Par / Hdcp / Metros, last cell = total
+//     <div class="holes-table-footer"><span>Vc: 71.5</span><span>Vs: 127</span></div>
 function parseClubHTML(html, clubId, slug) {
-  const nameMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const club = nameMatch ? nameMatch[1].replace(/<[^>]+>/g, "").trim() : "Unknown";
-  const wayDefs = [];
-  const wayRe = /selectWay\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([MF])'\s*,\s*'(\d+)'\s*,\s*'(\d+)'\s*\)/gi;
-  let wm;
-  while ((wm = wayRe.exec(html)) !== null) {
-    const dashIdx = wm[1].lastIndexOf(" - ");
-    wayDefs.push({ recorrido: dashIdx >= 0 ? wm[1].substring(dashIdx + 3).trim() : wm[1], tee: wm[2], gender: wm[3], wayId: wm[5] });
-  }
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const club = h1 ? decodeEntities(h1[1].replace(/<[^>]+>/g, "").trim()) : "Unknown";
 
-  // Each tee's scorecard section is anchored by id="holes_{wayId}" in the HTML.
-  // Find the TOTAL block within each section; skip tees with no block.
-  const blockRe = /TOTAL[\s\S]*?>\s*(\d{2,3})\s*<[\s\S]*?>\s*(\d{3,5})\s*<[\s\S]*?Vc[\s\S]*?>\s*([\d]+[,.][\d]+)\s*<[\s\S]*?Vs[\s\S]*?>\s*(\d+)\s*</i;
-  const nextSectionRe = /id="holes_\d+"/;
-
+  const optRe = /<option value="(rcpanel_[\d_]+)">([^<]*)<\/option>/g;
   const tees = [];
-  for (const def of wayDefs) {
-    const anchor = `id="holes_${def.wayId}"`;
+  let om;
+  while ((om = optRe.exec(html)) !== null) {
+    const panelId = om[1];
+    const label = decodeEntities(om[2]).trim();
+    const lm = label.match(/^(.*) - (.+?)\s*\(([MF])\)/);
+    if (!lm) continue;
+    const dashIdx = lm[1].lastIndexOf(" - ");
+    const recorrido = (dashIdx >= 0 ? lm[1].substring(dashIdx + 3) : lm[1]).replace(/\s+/g, " ").trim();
+
+    const anchor = `id="${panelId}"`;
     const secStart = html.indexOf(anchor);
     if (secStart < 0) continue;
     const rest = html.slice(secStart + anchor.length);
-    const nextMatch = rest.match(nextSectionRe);
-    const section = rest.slice(0, nextMatch ? rest.indexOf(nextMatch[0]) : rest.length);
-    const bm = section.match(blockRe);
-    if (!bm) continue;
-    tees.push({ recorrido: def.recorrido, tee: def.tee, gender: def.gender, par: parseInt(bm[1]), vc: parseFloat(bm[3].replace(",",".")), vs: parseInt(bm[4]), meters: parseInt(bm[2]) });
+    const next = rest.search(/id="rcpanel_[\d_]+"/);
+    const section = next >= 0 ? rest.slice(0, next) : rest;
+
+    const vc = section.match(/Vc:\s*([\d]+[.,]?\d*)/);
+    const vs = section.match(/Vs:\s*(\d+)/);
+    if (!vc || !vs) continue;
+    tees.push({
+      recorrido, tee: lm[2].trim(), gender: lm[3],
+      par: rowTotal(section, "Par"),
+      vc: parseFloat(vc[1].replace(",", ".")),
+      vs: parseInt(vs[1]),
+      meters: rowTotal(section, "Metros"),
+    });
   }
   return { club, club_id: parseInt(clubId), slug, total_tees: tees.length, tees, source: "rfegolf.es", scraped_at: new Date().toISOString() };
+}
+
+// Last <td> of the scorecard row labelled `label` (the TOTAL column).
+function rowTotal(section, label) {
+  const row = section.match(new RegExp(`holes-table-col-label">${label}</td>([\\s\\S]*?)</tr>`));
+  if (!row) return 0;
+  const cells = [...row[1].matchAll(/<td[^>]*>\s*(\d*)\s*<\/td>/g)].map(m => m[1]).filter(Boolean);
+  return cells.length ? parseInt(cells[cells.length - 1]) : 0;
 }
 
 // ─── Fetch PDF with Public Token ─────────────────────────────────────────────
@@ -295,7 +333,10 @@ async function fetchPDF(license) {
   // not have to click repeatedly until it succeeds.
   const MAX_ATTEMPTS = 5;
   const RETRY_DELAY_MS = 400;
-  const token = await getFreshToken();
+  // Since the 2026 WordPress migration rfegolf.es no longer embeds the coded_
+  // token, and the PDF endpoint serves without it. Send it only if found.
+  const token = await getFreshToken().catch(() => null);
+  const auth = token ? { "Authorization": token } : {};
   const pdfUrl = `https://api.rfeg.es/files/summaryhandicap/${license}.pdf`;
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -303,12 +344,12 @@ async function fetchPDF(license) {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const resp = await fetch(pdfUrl, {
       redirect: "manual",
-      headers: { "Authorization": token, "User-Agent": ua, "Accept": "application/pdf,*/*" },
+      headers: { ...auth, "User-Agent": ua, "Accept": "application/pdf,*/*" },
     });
     let finalResp = resp;
     if ([301,302,307,308].includes(resp.status)) {
       const loc = resp.headers.get("location");
-      if (loc) finalResp = await fetch(loc, { headers: { "Authorization": token, "User-Agent": "Mozilla/5.0", "Accept": "application/pdf,*/*" } });
+      if (loc) finalResp = await fetch(loc, { headers: { ...auth, "User-Agent": "Mozilla/5.0", "Accept": "application/pdf,*/*" } });
     }
     if (finalResp.ok) {
       return new Response(finalResp.body, {
