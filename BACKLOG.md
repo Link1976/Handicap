@@ -129,8 +129,8 @@ Quitar el buscador de licencias es solo una parte. Faltaría:
 
 ### Parser del PDF (`extractRFEGData`)
 
-- **Bug hándicaps plus**: ninguna regex captura el signo menos. Un diferencial `-1.2` se lee como
-  `1.2` (`extractDifferentials`), igual el HI (`NUEVO HÁNDICAP`). Afecta a jugadores scratch o mejor.
+- ~~Bug hándicaps plus~~: arreglado en `8fe55f1` (lectura con signo + visualización "+2.1").
+  Probado con textos sintéticos: revisar con el PDF real del primer jugador plus que use la app.
 - **Cruce de páginas por posición sin comprobar fechas**: si una página pierde una fila (la regex
   de página 1 exige `Individuales`), todo lo posterior se desplaza en silencio.
 - **Diferencial de respaldo `|| 0`**: si falta, queda 0 y el motor lo toma como uno de los mejores.
