@@ -25,6 +25,38 @@
 4. **Descartado**: apertura al público general con login RFEG masivo (riesgo bloqueo/ToS)
    y publicidad de terceros (no compensa en un nicho tan pequeño).
 
+5. **Nueva vía: pedir acceso oficial a la API de la RFEG**
+   - Tras rehacer su web (2026) tiene más sentido plantearlo. Un "no" también sirve para decidir.
+
+### Acceso a datos tras la migración de rfegolf.es a WordPress (análisis 2026-09-24)
+
+Estado comprobado en vivo:
+
+| Vía | Estado | Qué da |
+|-----|--------|--------|
+| PDF público `api.rfeg.es/files/summaryhandicap/{licencia}.pdf` | Funciona, **ya no pide token** | Historial completo (rondas, diferenciales) con solo la licencia |
+| Buscador nuevo `rfegolf.es/wp-json/handicap-search/v1/search?q=` | Funciona, público, sin token | Nombre, HI, club, federación y fecha de actualización (447.342 fichas). Busca por nombre, no por licencia |
+| Buscador antiguo (`?player=` del worker) | Roto (dependía del token `coded_`) | La app no lo usa |
+| Campos y tees (WordPress + lectura del HTML) | Funciona (arreglado en `f36759d`) | Valor de campo, slope, par, metros |
+| API con login `api.rfegolf.es` | No probada; la migración fue de la web, no de la API | HI de cualquiera; rondas/PDF solo propio + vinculados |
+
+Conclusiones:
+
+- **Hay más datos accesibles sin login que antes**, pero parece un descuido de la migración, no
+  una apertura buscada. Lo más probable es que lo cierren sin aviso. Para uso personal no importa:
+  la cascada de `fetchParse` ya tiene respaldo con login.
+- **Tres sistemas que cambian por separado** (servidor de ficheros, web WordPress, API con login).
+  La migración rompió dos de tres vías sin aviso: con clientes de pago habría sido una caída de servicio.
+- Que los datos se vean no autoriza a usarlos comercialmente: siguen siendo datos personales de
+  terceros (RGPD), con menores entre ellos.
+
+Impacto en las opciones:
+
+- **1 y 2 (freemium / IA)**: en teoría funcionarían sin pedir credenciales (desaparece el mayor
+  riesgo), pero sobre un acceso que probablemente se cierre. No construir producto sobre esto.
+- **3 (club)**: gana peso — es la única vía con el acceso a datos apoyado en un acuerdo.
+- **5 (acceso oficial)**: nueva, ver arriba.
+
 ## Funcionalidad pendiente
 
 - **Notificaciones push "¿jugaste hoy?"**: requiere Service Worker + permiso de notificaciones
