@@ -116,7 +116,7 @@ async function shareChartPNG(containerId,name,hi,onError){
     try{await Promise.all([document.fonts.load("700 34px 'Space Grotesk'"),document.fonts.load("500 22px 'JetBrains Mono'")])}catch(e){}
     ctx.fillStyle="#046A38";ctx.fillRect(0,0,W,H+head);
     ctx.fillStyle="#F5D400";ctx.font="700 34px 'Space Grotesk',sans-serif";ctx.fillText("HCAPP · "+(name||"Evolucion del Handicap"),28,46);
-    ctx.fillStyle="#F4F1E9";ctx.font="500 22px 'JetBrains Mono',monospace";ctx.fillText("Handicap Index: "+(hi!=null?hi:"—")+"  ·  "+new Date().toLocaleDateString("es-ES"),28,80);
+    ctx.fillStyle="#F4F1E9";ctx.font="500 22px 'JetBrains Mono',monospace";ctx.fillText("Handicap Index: "+fmtH(hi)+"  ·  "+new Date().toLocaleDateString("es-ES"),28,80);
     var img=new Image();
     await new Promise(function(res,rej){img.onload=res;img.onerror=function(){rej(new Error("No se pudo generar la imagen"))};img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(xml)});
     ctx.drawImage(img,0,head,W,H);
@@ -370,12 +370,32 @@ function parseDate(str) {
   return new Date(+y, +m - 1, +d);
 }
 
+// Hándicaps "plus" (mejores que scratch): la RFEG los escribe con signo delante (+1.2 o -1.2).
+// Un número con signo significa siempre "por debajo de 0"; internamente se guarda en negativo.
+// Los valores normales van sin signo.
+function signedNum(s) {
+  const v = parseFloat(String(s).replace(",", "."));
+  return /^\s*[+-]/.test(s) ? -Math.abs(v) : v;
+}
+
+// Formato de golf para mostrar HI y diferenciales: los plus (valor interno negativo) se
+// escriben "+2.1". Solo para valores sueltos; fórmulas y umbrales "≤" siguen en notación matemática.
+function fmtH(v) {
+  if (v == null || v === "" || isNaN(v)) return "\u2014";
+  const n = Number(v);
+  return n < 0 ? "+" + Math.abs(n).toFixed(1) : n.toFixed(1);
+}
+function fmtInt(v) {
+  const n = Number(v);
+  return n < 0 ? "+" + Math.abs(n) : String(n);
+}
+
 function extractRFEGData(fullText, pages) {
   const result = { player_name: "", handicap_index: null, rounds: [], raw: fullText };
   const nm = fullText.match(/FEDERADO:\s*([A-ZÁÉÍÓÚÑ\s,]+)\s*\(/i);
   if (nm) result.player_name = nm[1].trim().replace(/,$/, "");
-  const hm = fullText.match(/NUEVO\s+H[AÁ]NDICAP[:\s]+(\d+[.,]\d)/i);
-  if (hm) result.handicap_index = parseFloat(hm[1].replace(",", "."));
+  const hm = fullText.match(/NUEVO\s+H[AÁ]NDICAP[:\s]*([+-]?\d+[.,]\d)/i);
+  if (hm) result.handicap_index = signedNum(hm[1]);
 
   const diffs = extractDifferentials(pages[4] || "");
   const p3 = extractPage3Data(pages[2] || "");
@@ -413,38 +433,38 @@ function extractDifferentials(t) {
   const d = [];
   const lines = t.split(/(?=\b\d{1,2}\s+\d{2}\/\d{2}\/\d{4})/);
   for (const l of lines) {
-    const m = l.match(/^\s*\d{1,2}\s+\d{2}\/\d{2}\/\d{4}\s+.+?\s+(\d+[.,]\d)\s*$/);
-    if (m) { d.push(parseFloat(m[1].replace(",", "."))); continue; }
-    const all = l.match(/\d+\.\d/g) || l.match(/\d+,\d/g);
+    const m = l.match(/^\s*\d{1,2}\s+\d{2}\/\d{2}\/\d{4}\s+.+?\s+([+-]?\d+[.,]\d)\s*$/);
+    if (m) { d.push(signedNum(m[1])); continue; }
+    const all = l.match(/[+-]?\d+\.\d/g) || l.match(/[+-]?\d+,\d/g);
     const dm = l.match(/^\s*\d{1,2}\s+\d{2}\/\d{2}\/\d{4}/);
-    if (dm && all && all.length > 0) d.push(parseFloat(all[all.length - 1].replace(",", ".")));
+    if (dm && all && all.length > 0) d.push(signedNum(all[all.length - 1]));
   }
   return d;
 }
 
 function extractPage3Data(t) {
   const r = [];
-  const p = /(\d{1,2})\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(\d+)\s+(\d+[.,]\d+?)\s+(\d+)\s+(-?\d+)\s+(\d+[.,]\d+)/g;
+  const p = /(\d{1,2})\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(\d+)\s+(\d+[.,]\d+?)\s+(\d+)\s+(-?\d+)\s+([+-]?\d+[.,]\d+)/g;
   let m;
   while ((m = p.exec(t)) !== null) {
-    r.push({ date: m[2], tournament: m[3].trim(), rba: parseInt(m[4]), cr: parseFloat(m[5].replace(",", ".")), slope: parseInt(m[6]), asc: parseInt(m[7]), nivel: parseFloat(m[8].replace(",", ".")) });
+    r.push({ date: m[2], tournament: m[3].trim(), rba: parseInt(m[4]), cr: parseFloat(m[5].replace(",", ".")), slope: parseInt(m[6]), asc: parseInt(m[7]), nivel: signedNum(m[8]) });
   }
   return r;
 }
 
 function extractPage1Data(t) {
   const r = [];
-  const p = /(\d{1,2})\s+(\d{2}\/\d{2}\/\d{4})\s+([\s\S]*?)\s+([1-9])\s+([\s\S]*?)\s+Individuales\s+(\d+)\s+(\d+[.,]\d+)\/(\d+)\/(\d+)\s+[\d.,]+\s+(\d+)\s+(\d+)\s+(-?\d+)/g;
+  const p = /(\d{1,2})\s+(\d{2}\/\d{2}\/\d{4})\s+([\s\S]*?)\s+([1-9])\s+([\s\S]*?)\s+Individuales\s+(\d+)\s+(\d+[.,]\d+)\/(\d+)\/(\d+)\s+[+-]?[\d.,]+\s+([+-]?\d+)\s+(\d+)\s+(-?\d+)/g;
   let m;
   while ((m = p.exec(t)) !== null) {
     var courseName = m[5].trim().replace(/\s+/g, " ").replace(/^\d+\s+/, "");
-    r.push({ date: m[2], tournament: m[3].trim().replace(/\s+/g, " "), course: courseName, cr: parseFloat(m[7].replace(",", ".")), slope: parseInt(m[8]), hcp_juego: parseInt(m[10]), stb: parseInt(m[11]), asc: parseInt(m[12]) });
+    r.push({ date: m[2], tournament: m[3].trim().replace(/\s+/g, " "), course: courseName, cr: parseFloat(m[7].replace(",", ".")), slope: parseInt(m[8]), hcp_juego: Math.round(signedNum(m[10])), stb: parseInt(m[11]), asc: parseInt(m[12]) });
   }
   if (r.length === 0) {
-    const sp = /(\d{2}\/\d{2}\/\d{4})[\s\S]*?(\d+[.,]\d+)\/(\d+)\/\d+\s+[\d.,]+\s+(\d+)\s+(\d+)\s+(-?\d+)/g;
+    const sp = /(\d{2}\/\d{2}\/\d{4})[\s\S]*?(\d+[.,]\d+)\/(\d+)\/\d+\s+[+-]?[\d.,]+\s+([+-]?\d+)\s+(\d+)\s+(-?\d+)/g;
     let sm;
     while ((sm = sp.exec(t)) !== null) {
-      r.push({ date: sm[1], tournament: "", course: "", cr: parseFloat(sm[2].replace(",", ".")), slope: parseInt(sm[3]), hcp_juego: parseInt(sm[4]), stb: parseInt(sm[5]), asc: parseInt(sm[6]) });
+      r.push({ date: sm[1], tournament: "", course: "", cr: parseFloat(sm[2].replace(",", ".")), slope: parseInt(sm[3]), hcp_juego: Math.round(signedNum(sm[4])), stb: parseInt(sm[5]), asc: parseInt(sm[6]) });
     }
   }
   return r;
@@ -533,7 +553,7 @@ function HIndexCard(p){
   var ta=p.trend==="good"?"\u25BC":p.trend==="bad"?"\u25B2":"";
   return(<div style={{background:C.card,border:"1px solid "+C.border,borderRadius:"12px",padding:p.mob?"12px 10px":"16px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><span style={{fontSize:p.mob?"22px":"28px",fontFamily:"'JetBrains Mono',monospace",color:tc,fontWeight:"500"}}>{p.val!=null?p.val.toFixed(1):"\u2014"}</span>{ta?<span style={{fontSize:"12px",color:tc}}>{ta}</span>:null}</div><div style={{fontSize:"10px",letterSpacing:"1.5px",color:C.gd,marginTop:"2px"}}>{p.label}</div></div>
+      <div><div style={{display:"flex",alignItems:"center",gap:"6px"}}><span style={{fontSize:p.mob?"22px":"28px",fontFamily:"'JetBrains Mono',monospace",color:tc,fontWeight:"500"}}>{fmtH(p.val)}</span>{ta?<span style={{fontSize:"12px",color:tc}}>{ta}</span>:null}</div><div style={{fontSize:"10px",letterSpacing:"1.5px",color:C.gd,marginTop:"2px"}}>{p.label}</div></div>
       <button onClick={function(e){e.stopPropagation();setShow(!show)}} style={{background:"rgba(232,223,195,0.15)",border:"none",borderRadius:"50%",width:"22px",height:"22px",color:C.gold,cursor:"pointer",fontSize:"12px",fontWeight:"700",fontFamily:"'Space Grotesk',sans-serif",display:"flex",alignItems:"center",justifyContent:"center"}}>i</button>
     </div>
     {show?<div style={{marginTop:"10px",padding:"10px",background:"rgba(0,0,0,0.3)",borderRadius:"8px",fontSize:"11px",color:C.dim,lineHeight:1.5}}><strong style={{color:C.gold}}>{p.label}</strong> es la media de los diferenciales de las <strong style={{color:C.white}}>ultimas {p.win} rondas</strong>. Sirve para ver la tendencia reciente respecto al HI oficial.{p.trend==="good"?<span style={{color:C.good}}> Mejor que el HI = tendencia positiva.</span>:null}{p.trend==="bad"?<span style={{color:C.bad}}> Peor que el HI = tendencia negativa.</span>:null}</div>:null}
@@ -559,18 +579,18 @@ function CourseStats(p){
         <div onClick={function(){setExp(isO?null:i)}} style={{background:isO?"rgba(232,223,195,0.08)":"rgba(255,255,255,0.02)",border:"1px solid "+(isO?"rgba(232,223,195,0.2)":C.border),borderRadius:isO?"10px 10px 0 0":"10px",padding:p.mob?"10px 12px":"12px 16px",cursor:"pointer"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
             <div style={{flex:1,minWidth:0}}><div style={{color:C.white,fontSize:p.mob?"12px":"13px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div></div>
-            <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}><span title="Veces jugado en este campo" style={{fontSize:"10px",color:C.dim,fontFamily:"'JetBrains Mono',monospace"}}>{s.n}x</span><span title={"Media de diferencial en este campo: "+s.avg.toFixed(1)+". Cuanto mas bajo, mejor"} style={{fontSize:"15px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"600",color:dc}}>{s.avg.toFixed(1)}</span><span style={{fontSize:"10px",color:C.dimmer}}>{isO?"\u25B2":"\u25BC"}</span></div>
+            <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}><span title="Veces jugado en este campo" style={{fontSize:"10px",color:C.dim,fontFamily:"'JetBrains Mono',monospace"}}>{s.n}x</span><span title={"Media de diferencial en este campo: "+fmtH(s.avg)+". Cuanto mas bajo, mejor"} style={{fontSize:"15px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"600",color:dc}}>{fmtH(s.avg)}</span><span style={{fontSize:"10px",color:C.dimmer}}>{isO?"\u25B2":"\u25BC"}</span></div>
           </div>
           <div style={{background:C.dimmer,borderRadius:"3px",height:"4px"}}><div style={{width:bw+"%",height:"100%",background:C.gold,borderRadius:"3px"}}/></div>
         </div>
         {isO?<div style={{background:"rgba(0,0,0,0.2)",border:"1px solid rgba(232,223,195,0.15)",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"12px 16px"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}>
-            <div title="Tu mejor diferencial en este campo. Cuanto mas bajo, mejor juegas" style={{textAlign:"center"}}><div style={{fontSize:"18px",fontFamily:"'JetBrains Mono',monospace",color:C.good}}>{s.best.toFixed(1)}</div><div style={{fontSize:"8px",letterSpacing:"1px",color:C.dim}}>MEJOR DIF.</div></div>
-            <div title="Tu peor diferencial en este campo" style={{textAlign:"center"}}><div style={{fontSize:"18px",fontFamily:"'JetBrains Mono',monospace",color:C.bad}}>{s.worst.toFixed(1)}</div><div style={{fontSize:"8px",letterSpacing:"1px",color:C.dim}}>PEOR DIF.</div></div>
+            <div title="Tu mejor diferencial en este campo. Cuanto mas bajo, mejor juegas" style={{textAlign:"center"}}><div style={{fontSize:"18px",fontFamily:"'JetBrains Mono',monospace",color:C.good}}>{fmtH(s.best)}</div><div style={{fontSize:"8px",letterSpacing:"1px",color:C.dim}}>MEJOR DIF.</div></div>
+            <div title="Tu peor diferencial en este campo" style={{textAlign:"center"}}><div style={{fontSize:"18px",fontFamily:"'JetBrains Mono',monospace",color:C.bad}}>{fmtH(s.worst)}</div><div style={{fontSize:"8px",letterSpacing:"1px",color:C.dim}}>PEOR DIF.</div></div>
             <div title="Tu mejor puntuacion Stableford en este campo. Cuanto mas alto, mejor" style={{textAlign:"center"}}><div style={{fontSize:"18px",fontFamily:"'JetBrains Mono',monospace",color:C.gold}}>{s.bstb||"\u2014"}</div><div style={{fontSize:"8px",letterSpacing:"1px",color:C.dim}}>MEJOR STB</div></div>
           </div>
           <div style={{fontSize:"10px",color:C.dim,fontFamily:"'JetBrains Mono',monospace",display:"flex",gap:"12px",flexWrap:"wrap"}}><span>CR {s.cr}</span><span>Slope {s.slope}</span><span>Ultima: {s.last}</span></div>
-          {s.diffs.length>1?<div title="Cada barra es una ronda. Mas baja y verde = mejor resultado" style={{marginTop:"8px",display:"flex",gap:"4px",alignItems:"flex-end",height:"32px"}}>{s.diffs.map(function(d,j){var mx=Math.max.apply(null,s.diffs),mn=Math.min.apply(null,s.diffs),rg=mx-mn||1;var h=8+(d-mn)/rg*24;return<div key={j} title={"Dif. "+d.toFixed(1)} style={{flex:1,height:h+"px",background:d<=18?C.good:d<=23?C.gold:C.bad,borderRadius:"2px",opacity:0.7}}/>})}</div>:null}
+          {s.diffs.length>1?<div title="Cada barra es una ronda. Mas baja y verde = mejor resultado" style={{marginTop:"8px",display:"flex",gap:"4px",alignItems:"flex-end",height:"32px"}}>{s.diffs.map(function(d,j){var mx=Math.max.apply(null,s.diffs),mn=Math.min.apply(null,s.diffs),rg=mx-mn||1;var h=8+(d-mn)/rg*24;return<div key={j} title={"Dif. "+fmtH(d)} style={{flex:1,height:h+"px",background:d<=18?C.good:d<=23?C.gold:C.bad,borderRadius:"2px",opacity:0.7}}/>})}</div>:null}
         </div>:null}
       </div>)
     })}
@@ -584,7 +604,7 @@ function HIChart(p){
   function pts(h){if(!h||h.length<2)return"";return h.map(function(pt,i){return(PD.l+i/(h.length-1)*pW)+","+(PD.t+(1-(pt.hi-lo)/rng)*pH)}).join(" ")}
   var yT=[];var stp=rng<=5?0.5:rng<=10?1:2;for(var v=Math.ceil(lo/stp)*stp;v<=hi;v+=stp)yT.push({v:v,y:PD.t+(1-(v-lo)/rng)*pH});
   return(<svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",maxWidth:"500px"}}>
-    {yT.map(function(t,i){return<g key={i}><line x1={PD.l} y1={t.y} x2={W-PD.r} y2={t.y} stroke={C.dimmer} strokeWidth="0.5"/><text x={PD.l-6} y={t.y+3} textAnchor="end" fill={C.dim} fontSize="8" fontFamily="'JetBrains Mono',monospace">{t.v.toFixed(1)}</text></g>})}
+    {yT.map(function(t,i){return<g key={i}><line x1={PD.l} y1={t.y} x2={W-PD.r} y2={t.y} stroke={C.dimmer} strokeWidth="0.5"/><text x={PD.l-6} y={t.y+3} textAnchor="end" fill={C.dim} fontSize="8" fontFamily="'JetBrains Mono',monospace">{fmtH(t.v)}</text></g>})}
     {p.history.map(function(pt,i){if(p.history.length>8&&i>0&&i<p.history.length-1&&i%Math.ceil(p.history.length/6)!==0)return null;var x=PD.l+i/(p.history.length-1)*pW;return<text key={i} x={x} y={H-5} textAnchor="middle" fill={C.dim} fontSize="7" fontFamily="'JetBrains Mono',monospace">{pt.date.slice(5)}</text>})}
     <polyline points={pts(p.history)} fill="none" stroke={C.contour} strokeWidth="2" strokeLinejoin="round"/>
     {p.history.map(function(pt,i){var x=PD.l+i/(p.history.length-1)*pW,y=PD.t+(1-(pt.hi-lo)/rng)*pH;return<circle key={i} cx={x} cy={y} r="3" fill={C.contour}/>})}
@@ -597,8 +617,8 @@ function HIChart(p){
 function RoundRow(p){
   var r=p.round,u=p.isUsed,n=p.rowLabel,m=p.mob;var d=r.differential;var c=d<=15?C.good:d<=22?C.gold:C.bad;
   var click=p.onClick;
-  if(m)return(<div onClick={click} style={{padding:"10px 12px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"10px",marginBottom:"4px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",cursor:click?"pointer":"default"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}><div style={{display:"flex",alignItems:"center",gap:"6px",flex:1,minWidth:0}}><span style={{color:C.dimmer,fontSize:"10px",fontFamily:"'JetBrains Mono',monospace"}}>#{n}</span><span style={{color:C.white,fontSize:"12px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.course||r.tournament||"\u2014"}</span></div><div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><span style={{color:c,fontWeight:"600",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{d.toFixed(1)}</span><span style={{fontSize:"12px"}}>{u?"\u2B50":""}</span></div></div><div style={{display:"flex",gap:"12px",fontSize:"10px",fontFamily:"'JetBrains Mono',monospace",color:C.dim}}><span>{r.date}</span><span>CR {r.cr}</span><span>SLP {r.slope}</span><span>STB {r.stb}</span></div></div>);
-  return(<div onClick={click} style={{display:"grid",gridTemplateColumns:"32px 2fr 1fr 60px 60px 55px 65px 28px",gap:"6px",alignItems:"center",padding:"9px 14px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"8px",marginBottom:"3px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",cursor:click?"pointer":"default"}}><span style={{color:C.dimmer,fontSize:"10px"}}>#{n}</span><div style={{overflow:"hidden"}}><div style={{color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:"11px",fontWeight:"500"}}>{r.course||r.tournament||"\u2014"}</div><div style={{color:C.dim,fontSize:"9px",marginTop:"2px"}}>{r.course?r.tournament:""}</div></div><div style={{color:C.dimmer,fontSize:"10px",textAlign:"center"}}>{r.date}</div><span style={{color:C.dim,textAlign:"center"}}>{r.cr||"\u2014"}</span><span style={{color:C.dim,textAlign:"center"}}>{r.slope||"\u2014"}</span><span style={{color:C.white,textAlign:"center"}}>{r.stb||"\u2014"}</span><span style={{color:c,fontWeight:"600",textAlign:"center"}}>{d.toFixed(1)}</span><span style={{textAlign:"center",fontSize:"14px"}}>{u?"\u2B50":""}</span></div>)
+  if(m)return(<div onClick={click} style={{padding:"10px 12px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"10px",marginBottom:"4px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",cursor:click?"pointer":"default"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"4px"}}><div style={{display:"flex",alignItems:"center",gap:"6px",flex:1,minWidth:0}}><span style={{color:C.dimmer,fontSize:"10px",fontFamily:"'JetBrains Mono',monospace"}}>#{n}</span><span style={{color:C.white,fontSize:"12px",fontWeight:"500",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.course||r.tournament||"\u2014"}</span></div><div style={{display:"flex",alignItems:"center",gap:"6px",flexShrink:0}}><span style={{color:c,fontWeight:"600",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{fmtH(d)}</span><span style={{fontSize:"12px"}}>{u?"\u2B50":""}</span></div></div><div style={{display:"flex",gap:"12px",fontSize:"10px",fontFamily:"'JetBrains Mono',monospace",color:C.dim}}><span>{r.date}</span><span>CR {r.cr}</span><span>SLP {r.slope}</span><span>STB {r.stb}</span></div></div>);
+  return(<div onClick={click} style={{display:"grid",gridTemplateColumns:"32px 2fr 1fr 60px 60px 55px 65px 28px",gap:"6px",alignItems:"center",padding:"9px 14px",background:u?"rgba(232,223,195,0.07)":"rgba(255,255,255,0.02)",borderRadius:"8px",marginBottom:"3px",borderLeft:u?"3px solid "+C.gold:"3px solid transparent",fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",cursor:click?"pointer":"default"}}><span style={{color:C.dimmer,fontSize:"10px"}}>#{n}</span><div style={{overflow:"hidden"}}><div style={{color:C.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:"11px",fontWeight:"500"}}>{r.course||r.tournament||"\u2014"}</div><div style={{color:C.dim,fontSize:"9px",marginTop:"2px"}}>{r.course?r.tournament:""}</div></div><div style={{color:C.dimmer,fontSize:"10px",textAlign:"center"}}>{r.date}</div><span style={{color:C.dim,textAlign:"center"}}>{r.cr||"\u2014"}</span><span style={{color:C.dim,textAlign:"center"}}>{r.slope||"\u2014"}</span><span style={{color:C.white,textAlign:"center"}}>{r.stb||"\u2014"}</span><span style={{color:c,fontWeight:"600",textAlign:"center"}}>{fmtH(d)}</span><span style={{textAlign:"center",fontSize:"14px"}}>{u?"\u2B50":""}</span></div>)
 }
 
 // Texto de resumen de una ronda, usado tanto para Web Share API como para el fallback de portapapeles
@@ -606,7 +626,7 @@ function roundShareText(r,isUsed,rowLabel,playerName){
   var lines=[];
   lines.push("\u26F3 "+(r.course||r.tournament||"Ronda")+" \u2014 "+(r.date||""));
   if(playerName)lines.push(playerName);
-  lines.push("Diferencial: "+r.differential.toFixed(1)+(isUsed?" \u2B50 computa":""));
+  lines.push("Diferencial: "+fmtH(r.differential)+(isUsed?" \u2B50 computa":""));
   lines.push("CR "+(r.cr||"\u2014")+" \u00B7 Slope "+(r.slope||"\u2014")+" \u00B7 Stableford "+(r.stb||"\u2014"));
   if(r.hcp_juego!=null)lines.push("HCP de juego: "+r.hcp_juego);
   if(rowLabel)lines.push("Ronda #"+rowLabel);
@@ -644,7 +664,7 @@ function RoundDetailModal(p){
 
       <div style={{textAlign:"center",marginBottom:"18px",padding:"16px",background:"rgba(255,255,255,0.03)",borderRadius:"12px"}}>
         <div style={{fontSize:"9px",color:MODAL_C.dim,letterSpacing:"2px",marginBottom:"4px"}}>DIFERENCIAL</div>
-        <div style={{fontSize:"36px",fontFamily:"'JetBrains Mono',monospace",color:c,fontWeight:"700",lineHeight:1}}>{d.toFixed(1)}</div>
+        <div style={{fontSize:"36px",fontFamily:"'JetBrains Mono',monospace",color:c,fontWeight:"700",lineHeight:1}}>{fmtH(d)}</div>
         {u?<div style={{fontSize:"11px",color:MODAL_C.gold,marginTop:"6px"}}>{"\u2B50"} Computa para el HI</div>:null}
       </div>
 
@@ -715,11 +735,11 @@ function HIGoal(p){
     {done?<div style={{textAlign:"center",padding:"20px 0"}}>
       <div style={{fontSize:"48px",marginBottom:"8px"}}>{String.fromCodePoint(0x1F389)}</div>
       <div style={{fontSize:"18px",color:C.good,fontWeight:"600"}}>Objetivo conseguido!</div>
-      <div style={{fontSize:"13px",color:C.dim,marginTop:"4px"}}>Has llegado a <span style={{color:C.gold}}>{hi}</span> desde <span style={{color:C.white}}>{st}</span></div>
+      <div style={{fontSize:"13px",color:C.dim,marginTop:"4px"}}>Has llegado a <span style={{color:C.gold}}>{fmtH(hi)}</span> desde <span style={{color:C.white}}>{st}</span></div>
     </div>
     :<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:"12px"}}>
-        <div><div style={{fontSize:"10px",color:C.dim,letterSpacing:"1px",fontFamily:"'JetBrains Mono',monospace"}}>ACTUAL</div><div style={{fontSize:"28px",fontFamily:"'JetBrains Mono',monospace",color:C.white,lineHeight:1}}>{hi}</div></div>
+        <div><div style={{fontSize:"10px",color:C.dim,letterSpacing:"1px",fontFamily:"'JetBrains Mono',monospace"}}>ACTUAL</div><div style={{fontSize:"28px",fontFamily:"'JetBrains Mono',monospace",color:C.white,lineHeight:1}}>{fmtH(hi)}</div></div>
         <div style={{textAlign:"center",flex:1}}><div style={{fontSize:"24px",color:pct>=50?C.good:C.gold,fontWeight:"600"}}>{pct}%</div></div>
         <div style={{textAlign:"right"}}><div style={{fontSize:"10px",color:C.dim,letterSpacing:"1px",fontFamily:"'JetBrains Mono',monospace"}}>META</div><div style={{fontSize:"28px",fontFamily:"'JetBrains Mono',monospace",color:C.gold,lineHeight:1}}>{tgt}</div></div>
       </div>
@@ -729,7 +749,7 @@ function HIGoal(p){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",fontSize:"11px"}}>
         <div style={{textAlign:"center",padding:"8px",background:"rgba(255,255,255,0.03)",borderRadius:"8px"}}><div style={{color:C.white,fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{remaining>0?"-"+remaining.toFixed(1):String.fromCodePoint(0x2714)}</div><div style={{fontSize:"8px",color:C.dim,letterSpacing:"1px",marginTop:"2px"}}>FALTA</div></div>
         <div style={{textAlign:"center",padding:"8px",background:"rgba(255,255,255,0.03)",borderRadius:"8px"}}><div style={{color:C.white,fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{dt}</div><div style={{fontSize:"8px",color:C.dim,letterSpacing:"1px",marginTop:"2px"}}>INICIO</div></div>
-        <div style={{textAlign:"center",padding:"8px",background:"rgba(255,255,255,0.03)",borderRadius:"8px"}}><div style={{color:trend==="good"?C.good:trend==="bad"?C.bad:C.dim,fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{h5!=null?h5.toFixed(1):"\u2014"}</div><div style={{fontSize:"9px",color:C.dim,letterSpacing:"1px",marginTop:"2px"}}>H5 TEND.</div></div>
+        <div style={{textAlign:"center",padding:"8px",background:"rgba(255,255,255,0.03)",borderRadius:"8px"}}><div style={{color:trend==="good"?C.good:trend==="bad"?C.bad:C.dim,fontSize:"14px",fontFamily:"'JetBrains Mono',monospace"}}>{fmtH(h5)}</div><div style={{fontSize:"9px",color:C.dim,letterSpacing:"1px",marginTop:"2px"}}>H5 TEND.</div></div>
       </div>
       {proj?<div style={{marginTop:"12px",padding:"10px 14px",background:proj.flat?"rgba(255,255,255,0.03)":"rgba(93,184,112,0.08)",border:"1px solid "+(proj.flat?C.border:"rgba(93,184,112,0.2)"),borderRadius:"8px",fontSize:"12px",color:proj.flat?C.dim:C.good,lineHeight:1.5}}>
         {proj.flat?"Cuando tu HI muestre una tendencia clara a la baja, veras aqui la fecha estimada para alcanzar tu meta.":"A tu ritmo actual, alcanzarias "+tgt+" hacia "+proj.date+" (~"+proj.days+" dias)."}
@@ -877,10 +897,10 @@ function PlayingHCP(p){
       <div><label style={lbl()}>Par</label><input value={par} onChange={function(e){sPar(e.target.value)}} placeholder="72" style={inp()} type="number"/></div>
     </div>
     {result!=null?<div style={{background:C.green,border:"1px dashed "+C.border,borderRadius:"14px",padding:"20px",textAlign:"center"}}>
-      <div style={{fontSize:"42px",color:C.white,fontWeight:"700",fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{result}</div>
+      <div style={{fontSize:"42px",color:C.white,fontWeight:"700",fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{fmtInt(result)}</div>
       <div style={{fontSize:"10px",color:C.dim,letterSpacing:"2px",marginTop:"6px"}}>GOLPES DE VENTAJA</div>
       <div style={{marginTop:"12px",fontSize:"11px",color:C.dim,lineHeight:1.5}}>
-        Con HI <span style={{color:C.gold}}>{p.hi}</span> en un campo de V.Campo <span style={{color:C.white}}>{cr}</span> / Slope <span style={{color:C.white}}>{sl}</span> / Par <span style={{color:C.white}}>{par}</span>
+        Con HI <span style={{color:C.gold}}>{fmtH(p.hi)}</span> en un campo de V.Campo <span style={{color:C.white}}>{cr}</span> / Slope <span style={{color:C.white}}>{sl}</span> / Par <span style={{color:C.white}}>{par}</span>
       </div>
       <div style={{marginTop:"8px",fontSize:"10px",color:C.dimmer}}>
         {p.hi} x ({sl}/113) + ({cr} - {par}) = {(p.hi*(parseInt(sl)/113)+(parseFloat(cr)-parseInt(par))).toFixed(1)} {String.fromCodePoint(0x2192)} {result}
@@ -909,13 +929,13 @@ function DefensePlan(p){
       {h===1
         ?<span>Se cae en tu <strong style={{color:C.white}}>proxima ronda</strong>: </span>
         :<span>Las <strong style={{color:C.white}}>{h-1}</strong> proximas salidas no computan. La <strong style={{color:C.white}}>{h}{"ª"}</strong> si: </span>}
-      el <span style={{fontFamily:mono,fontWeight:"700",color:C.contour}}>{o.differential.toFixed(1)}</span>
+      el <span style={{fontFamily:mono,fontWeight:"700",color:C.contour}}>{fmtH(o.differential)}</span>
       {o.date?" del "+o.date:""}{where?" · "+where:""} <span style={{color:C.contour}}>{"⭐"}</span>
     </div>
     <div style={{borderRadius:"10px",padding:"10px 12px",border:"1px solid "+C.border,background:C.card,marginBottom:"13px"}}>
       <div style={{fontSize:"8.5px",letterSpacing:"1.5px",color:C.dim,marginBottom:"3px",fontFamily:mono}}>SI NO HACES NADA BUENO</div>
       <div style={{fontFamily:mono,fontSize:"16px",fontWeight:"700",color:C.white}}>
-        {plan.hiNow.toFixed(1)} <span style={{color:C.dim,fontWeight:"400"}}>{"→"}</span> {plan.hiDoNothing!=null?plan.hiDoNothing.toFixed(1):"—"}
+        {fmtH(plan.hiNow)} <span style={{color:C.dim,fontWeight:"400"}}>{"→"}</span> {fmtH(plan.hiDoNothing)}
         {up?<span style={{color:C.bad,fontSize:"13px"}}> {"▲"} {up.toFixed(1)}</span>:null}
       </div>
     </div>
@@ -993,8 +1013,8 @@ return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItem
         </div>
         {disp.map(function(s,i){var dc=s.delta<0?C.good:s.delta>0?C.bad:C.dim;return<div key={i} style={{display:"grid",gridTemplateColumns:nine?"45px 100px 80px 70px 40px":"55px 80px 80px 70px 40px",gap:"4px",padding:"5px 8px",borderRadius:"6px",background:s.delta<0?"rgba(93,184,112,0.06)":s.delta>0?"rgba(208,96,96,0.05)":"transparent",fontSize:"13px",fontFamily:"'JetBrains Mono',monospace"}}>
           <span style={{color:C.white}}>{s.g}</span>
-          <span style={{color:C.dim}}>{nine?<span style={{fontSize:"11px"}}>{s.d9!=null?s.d9.toFixed(1):""}+{s.dExp!=null?s.dExp.toFixed(1):""}=<strong style={{color:C.white}}>{s.d.toFixed(1)}</strong></span>:s.d.toFixed(1)}</span>
-          <span style={{color:C.gold,fontWeight:"600"}}>{s.hi!=null?s.hi.toFixed(1):"\u2014"}</span>
+          <span style={{color:C.dim}}>{nine?<span style={{fontSize:"11px"}}>{s.d9!=null?s.d9.toFixed(1):""}+{s.dExp!=null?s.dExp.toFixed(1):""}=<strong style={{color:C.white}}>{s.d.toFixed(1)}</strong></span>:fmtH(s.d)}</span>
+          <span style={{color:C.gold,fontWeight:"600"}}>{fmtH(s.hi)}</span>
           <span style={{color:dc}}>{s.delta!=null?(s.delta>0?"\u25B2":s.delta<0?"\u25BC":"\u2550"):"\u2014"} {s.delta!=null?Math.abs(s.delta).toFixed(1):""}</span>
           <span style={{textAlign:"center",fontSize:"11px"}}>{s.c?"\u2B50":"\u2014"}</span>
         </div>})}
@@ -1169,7 +1189,7 @@ function App(){
           var h=loadHistory(p.license).filter(function(x){return x.hi!=null});var delta=null;
           if(h.length>=2){delta=Math.round((h[h.length-1].hi-h[h.length-2].hi)*10)/10}
           var days=null;if(p.lastUpdate){days=Math.floor((Date.now()-new Date(p.lastUpdate).getTime())/86400000)}
-          return<div key={p.license} onClick={function(){consult(p.license)}} style={{background:C.green,border:"1px solid "+C.border,borderRadius:"14px",padding:"18px 20px",marginBottom:"10px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:"16px",fontWeight:"600",color:C.white}}>{p.name||"Jugador"}</div><div style={{fontSize:"11px",color:C.dim,fontFamily:"'JetBrains Mono',monospace"}}>Licencia {p.license} - {p.lastUpdate}{days!=null&&days>=7?<span> {"\u00B7"} hace {days}d</span>:null}</div></div><div style={{display:"flex",alignItems:"center",gap:"12px"}}><div style={{textAlign:"right"}}><div style={{display:"flex",alignItems:"baseline",gap:"6px",justifyContent:"flex-end"}}>{delta!=null&&delta!==0?<span style={{fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",color:delta<0?C.heroTrend:C.bad}}>{delta<0?"\u25BC":"\u25B2"}{Math.abs(delta).toFixed(1)}</span>:null}<span style={{fontSize:"28px",color:C.white,fontWeight:"700",fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{p.hi!=null?p.hi:"\u2014"}</span></div><div style={{fontSize:"9px",color:C.dim}}>HI</div></div><button onClick={function(e){e.stopPropagation();delProf(p.license)}} style={{background:"transparent",border:"1px solid "+C.border,borderRadius:"6px",color:C.dim,padding:"4px 8px",cursor:"pointer",fontSize:"14px"}}>{"\u00D7"}</button></div></div>})}</div>:null}
+          return<div key={p.license} onClick={function(){consult(p.license)}} style={{background:C.green,border:"1px solid "+C.border,borderRadius:"14px",padding:"18px 20px",marginBottom:"10px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontSize:"16px",fontWeight:"600",color:C.white}}>{p.name||"Jugador"}</div><div style={{fontSize:"11px",color:C.dim,fontFamily:"'JetBrains Mono',monospace"}}>Licencia {p.license} - {p.lastUpdate}{days!=null&&days>=7?<span> {"\u00B7"} hace {days}d</span>:null}</div></div><div style={{display:"flex",alignItems:"center",gap:"12px"}}><div style={{textAlign:"right"}}><div style={{display:"flex",alignItems:"baseline",gap:"6px",justifyContent:"flex-end"}}>{delta!=null&&delta!==0?<span style={{fontSize:"12px",fontFamily:"'JetBrains Mono',monospace",color:delta<0?C.heroTrend:C.bad}}>{delta<0?"\u25BC":"\u25B2"}{Math.abs(delta).toFixed(1)}</span>:null}<span style={{fontSize:"28px",color:C.white,fontWeight:"700",fontFamily:"'JetBrains Mono',monospace",lineHeight:1}}>{fmtH(p.hi)}</span></div><div style={{fontSize:"9px",color:C.dim}}>HI</div></div><button onClick={function(e){e.stopPropagation();delProf(p.license)}} style={{background:"transparent",border:"1px solid "+C.border,borderRadius:"6px",color:C.dim,padding:"4px 8px",cursor:"pointer",fontSize:"14px"}}>{"\u00D7"}</button></div></div>})}</div>:null}
       <Card><div style={lbl()}>{profs.length?"AGREGAR OTRO JUGADOR":"INTRODUCE TU LICENCIA RFEG"}</div><div style={{display:"flex",gap:"10px"}}><input value={lic} onChange={function(e){setLic(e.target.value)}} onKeyDown={function(e){if(e.key==="Enter")addPlayer()}} placeholder="Ej: CMA8924203" style={Object.assign({},inp(),{fontSize:"18px",letterSpacing:"3px",flex:1})} inputMode="text" autoCapitalize="characters" autoCorrect="off" autoComplete="off" spellCheck={false}/><button onClick={addPlayer} style={{background:C.white,border:"none",borderRadius:"10px",color:C.bg,padding:"0 20px",cursor:"pointer",fontWeight:"700",fontSize:"13px",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"nowrap"}}>CONSULTAR</button></div></Card>
     </div>:null}
 
@@ -1198,7 +1218,7 @@ function App(){
             <circle cx="100" cy="100" r="92" fill="none" stroke={C.contour} strokeWidth="1.4" opacity=".35"/>
             <circle cx="100" cy="100" r="72" fill="none" stroke={C.contour} strokeWidth="1.4" opacity=".5"/>
             <circle cx="100" cy="100" r="52" fill="none" stroke={C.contour} strokeWidth="1.6" opacity=".7"/>
-            <text x="100" y="114" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontWeight="700" fontSize="48" fill={C.white}>{hi!=null?hi:"—"}</text>
+            <text x="100" y="114" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontWeight="700" fontSize="48" fill={C.white}>{fmtH(hi)}</text>
           </svg>
           {recentDelta!=null&&recentDelta!==0?<div style={{fontSize:"13px",fontFamily:"'JetBrains Mono',monospace",color:recentDelta<0?C.heroTrend:C.bad,textTransform:"uppercase",letterSpacing:"0.05em",marginTop:"6px",fontWeight:"700"}}>{recentDelta<0?"▼":"▲"} {Math.abs(recentDelta).toFixed(1)} reciente</div>:null}
           {data.source==="api"?<div style={{fontSize:"9px",color:C.bad,marginTop:"4px"}}>{"⚠"} Datos limitados</div>:null}
@@ -1221,7 +1241,7 @@ function App(){
       </Card>:null}
 
       {(function(){var l10=data.rounds.slice(-10),l5=data.rounds.slice(-5);var h10=l10.length?Math.round(l10.reduce(function(s,r){return s+r.differential},0)/l10.length*10)/10:null;var h5=l5.length?Math.round(l5.reduce(function(s,r){return s+r.differential},0)/l5.length*10)/10:null;var t10=h10!=null&&hi!=null?(h10<hi?"good":h10>hi?"bad":"same"):"same";var t5=h5!=null&&hi!=null?(h5<hi?"good":h5>hi?"bad":"same"):"same";
-        return<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:mob?"6px":"12px",marginBottom:"8px"}}>{[{l:"RONDAS",v:data.rounds.length,c:C.white},{l:"COMPUTAN",v:usedSet.size,c:C.accent},{l:"MEJOR",v:last20.length?Math.min.apply(null,last20.map(function(r){return r.differential})).toFixed(1):"—",c:C.white},{l:"MEDIA",v:last20.length?(last20.reduce(function(s,r){return s+r.differential},0)/last20.length).toFixed(1):"—",c:C.white}].map(function(x,i){return<div key={i} style={{background:C.card,border:"1px dashed "+C.border,borderRadius:"10px",padding:mob?"12px 6px":"16px",textAlign:"center"}}><div style={{fontSize:mob?"17px":"22px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"700",color:x.c,marginBottom:"2px"}}>{x.v}</div><div style={{fontSize:mob?"10.5px":"10px",letterSpacing:"0.5px",color:C.dimStrong,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600",textTransform:"uppercase"}}>{x.l}</div></div>})}</div>
+        return<div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:mob?"6px":"12px",marginBottom:"8px"}}>{[{l:"RONDAS",v:data.rounds.length,c:C.white},{l:"COMPUTAN",v:usedSet.size,c:C.accent},{l:"MEJOR",v:last20.length?fmtH(Math.min.apply(null,last20.map(function(r){return r.differential}))):"—",c:C.white},{l:"MEDIA",v:last20.length?fmtH(last20.reduce(function(s,r){return s+r.differential},0)/last20.length):"—",c:C.white}].map(function(x,i){return<div key={i} style={{background:C.card,border:"1px dashed "+C.border,borderRadius:"10px",padding:mob?"12px 6px":"16px",textAlign:"center"}}><div style={{fontSize:mob?"17px":"22px",fontFamily:"'JetBrains Mono',monospace",fontWeight:"700",color:x.c,marginBottom:"2px"}}>{x.v}</div><div style={{fontSize:mob?"10.5px":"10px",letterSpacing:"0.5px",color:C.dimStrong,fontFamily:"'Space Grotesk',sans-serif",fontWeight:"600",textTransform:"uppercase"}}>{x.l}</div></div>})}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:mob?"6px":"12px",marginBottom:"20px"}}><HIndexCard label="H10" val={h10} trend={t10} win={10} mob={mob}/><HIndexCard label="H5" val={h5} trend={t5} win={5} mob={mob}/></div></div>
       })()}
 
@@ -1241,7 +1261,7 @@ function App(){
             <polyline points={pts.join(" ")} fill="none" stroke={C.contour} strokeWidth="2"/>
             {xy.map(function(p,i){var isLast=i===xy.length-1;return<g key={i}>
               <circle cx={p.x} cy={p.y} r={isLast?4:3} fill={isLast?C.accent:C.contour}/>
-              <text x={p.x} y={p.y-8} textAnchor={i===0?"start":i===xy.length-1?"end":"middle"} fill={isLast?C.accent:C.white} fontSize="10" fontFamily="'JetBrains Mono',monospace" fontWeight={isLast?"700":"500"}>{p.v.toFixed(1)}</text>
+              <text x={p.x} y={p.y-8} textAnchor={i===0?"start":i===xy.length-1?"end":"middle"} fill={isLast?C.accent:C.white} fontSize="10" fontFamily="'JetBrains Mono',monospace" fontWeight={isLast?"700":"500"}>{fmtH(p.v)}</text>
             </g>})}
           </svg>
         </div>
