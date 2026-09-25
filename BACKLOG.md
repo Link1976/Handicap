@@ -130,7 +130,8 @@ Quitar el buscador de licencias es solo una parte. Faltaría:
 ### Parser del PDF (`extractRFEGData`)
 
 - ~~Bug hándicaps plus~~: arreglado en `8fe55f1` (lectura con signo + visualización "+2.1").
-  Probado con textos sintéticos: revisar con el PDF real del primer jugador plus que use la app.
+  Verificado en producción con un jugador plus real (2026-09-25): rondas, fechas, diferenciales,
+  mejor y media cuadran con la RFEG.
 - **Cruce de páginas por posición sin comprobar fechas**: si una página pierde una fila (la regex
   de página 1 exige `Individuales`), todo lo posterior se desplaza en silencio.
 - **Diferencial de respaldo `|| 0`**: si falta, queda 0 y el motor lo toma como uno de los mejores.
