@@ -186,9 +186,9 @@ Los endpoints POST esperan body JSON `{username, password}`.
 
 El cache de tees se deshabilitó porque la RFEG actualiza CR/Slope sin aviso y el cache de 30 días mostraba valores obsoletos.
 
-### Migración de rfegolf.es a WordPress (2026)
+### Fuente de datos: rfegolf.es (WordPress)
 
-Ya no existe el token público `coded_…` ni `api.rfeg.es/web/search/club`. Adaptado en el commit `f36759d` (desplegado y verificado el 2026-09-24).
+rfegolf.es es un WordPress. El token `coded_…` y `api.rfeg.es/web/search/club` no existen; `rfeg-courses-worker-v7_1.js` (histórico) todavía los usa, no tomarlo como referencia.
 
 - **Búsqueda** (`searchViaWordPress`): API REST de WordPress `rfegolf.es/wp-json/wp/v2/club?search=…`. El `id` devuelto es el ID del post de WordPress; el nombre sale de `yoast_head_json.title`.
 - **Tees** (`parseClubHTML`): parsea `rfegolf.es/club/{slug}` (solo necesita el slug):
