@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="HCAPP">
@@ -15,7 +15,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body,#root{min-height:100vh;background:#046A38}
-body{font-family:'Space Grotesk',sans-serif;color:#F4F1E9;overflow-x:hidden}
+body{font-family:'Space Grotesk',sans-serif;color:#F4F1E9;overflow-x:hidden;touch-action:manipulation}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -488,7 +488,7 @@ function savePaperMode(v){try{localStorage.setItem("theme_paper",v?"1":"0")}catc
 applyTheme(loadPaperMode());
 
 function lbl(t){var c=t||C;return {display:"block",fontSize:"11px",letterSpacing:"2px",color:c.dim,marginBottom:"6px",fontFamily:"'JetBrains Mono',monospace"}}
-function inp(t){var c=t||C;return {width:"100%",background:c.inputBg,border:"1px solid "+c.border,borderRadius:"8px",color:c.white,padding:"12px 14px",fontSize:"15px",outline:"none",boxSizing:"border-box",fontFamily:"'Space Grotesk',sans-serif"}}
+function inp(t){var c=t||C;return {width:"100%",background:c.inputBg,border:"1px solid "+c.border,borderRadius:"8px",color:c.white,padding:"12px 14px",fontSize:"16px",outline:"none",boxSizing:"border-box",fontFamily:"'Space Grotesk',sans-serif"}}
 // El modal de login es una superficie temporal y enfocada: se queda siempre en la
 // version oscura de la marca (no sigue el toggle Torneo/Papel) para no tener que
 // re-tematizar cada rgba(...) suelto de dentro, y porque no se mira largo rato al sol.
@@ -1098,7 +1098,7 @@ function LoginModal(p){
         <div style={{fontSize:"11px",color:MODAL_C.dim,marginBottom:"10px",lineHeight:1.5}}>Cada jugador tiene un ID interno en la RFEG (ej: Alberto=26291). Asocia aqui el numero de licencia con su ID para poder descargar sus datos completos.</div>
         {window._rfegFedIds?<div style={{marginBottom:"10px"}}>{Object.keys(window._rfegFedIds).map(function(k){return<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",background:"rgba(255,255,255,0.03)",borderRadius:"6px",marginBottom:"3px",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}><span><span style={{color:MODAL_C.dim}}>Lic </span><span style={{color:MODAL_C.white}}>{k}</span><span style={{color:MODAL_C.dim}}> → ID </span><span style={{color:MODAL_C.gold}}>{window._rfegFedIds[k]}</span></span><button onClick={function(){delete window._rfegFedIds[k];saveFedIds();if(p.onRefresh)p.onRefresh()}} style={{background:"none",border:"none",color:MODAL_C.dim,cursor:"pointer",fontSize:"12px"}}>{"×"}</button></div>})}</div>:null}
         <div style={{display:"flex",gap:"8px"}}>
-          <input value={fid} onChange={function(e){sFid(e.target.value)}} placeholder="licencia:fedId (ej: 924203:328208)" style={Object.assign({},inp(MODAL_C),{flex:1,fontSize:"12px"})} onKeyDown={function(e){if(e.key==="Enter")addMapping()}}/>
+          <input value={fid} onChange={function(e){sFid(e.target.value)}} placeholder="licencia:fedId (ej: 924203:328208)" style={Object.assign({},inp(MODAL_C),{flex:1,fontSize:"16px"})} onKeyDown={function(e){if(e.key==="Enter")addMapping()}}/>
           <button onClick={addMapping} style={{background:"rgba(232,223,195,0.15)",border:"1px solid rgba(232,223,195,0.3)",borderRadius:"8px",color:MODAL_C.gold,padding:"6px 14px",cursor:"pointer",fontSize:"11px",whiteSpace:"nowrap"}}>ASOCIAR</button>
         </div>
       </div>
