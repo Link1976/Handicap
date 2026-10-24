@@ -46,7 +46,7 @@ wrangler deploy rfeg-courses-worker-v7.js --name rfeg-courses --compatibility-da
 
 - Verificar en producción con cache-busting (`?nc=timestamp`): el navegador y el service worker cachean el shell.
 - Antes de desplegar, `git pull`: pueden llegar commits desde sesiones web de Claude (ramas `claude/*`).
-- Ojo: `wrangler.toml` de la raíz es del worker `golf-handicap`. Al desplegar `rfeg-courses` comprobar que conserva el binding KV `RFEG_CACHE` (el código funciona sin él, pero sin caché de búsqueda).
+- Ojo: `wrangler.toml` de la raíz es del worker `golf-handicap`. Desplegar `rfeg-courses` con el comando de arriba **pierde** el binding KV `RFEG_CACHE` (el código funciona sin él, pero sin caché de búsqueda). Usar una config aparte con `[[kv_namespaces]] binding = "RFEG_CACHE"`, `id = "0c9184e7780e46028e45dc79417ebf13"` y `wrangler deploy --config <esa config>`.
 - Versiones: cada iteración grande genera un nuevo `vXX.html`. `index.html` debe ser copia exacta de la versión activa.
 
 ### `worker-static.js`
@@ -190,11 +190,11 @@ El cache de tees se deshabilitó porque la RFEG actualiza CR/Slope sin aviso y e
 
 rfegolf.es es un WordPress. El token `coded_…` y `api.rfeg.es/web/search/club` no existen; `rfeg-courses-worker-v7_1.js` (histórico) todavía los usa, no tomarlo como referencia.
 
-- **Búsqueda** (`searchViaWordPress`): API REST de WordPress `rfegolf.es/wp-json/wp/v2/club?search=…`. El `id` devuelto es el ID del post de WordPress; el nombre sale de `yoast_head_json.title`.
+- **Búsqueda** (`searchViaWordPress`): parsea el buscador HTML de la web `rfegolf.es/?s=…&post_type=club` (enlaces `<h2 class="entry-title"><a href=".../club/{slug}">`). La API REST de WordPress (`/wp-json/`) está cerrada desde octubre 2026. Los resultados no traen ID numérico: el `id` es el propio slug (la app solo necesita un `club_id` no vacío). Los favoritos antiguos con ID numérico siguen funcionando.
 - **Tees** (`parseClubHTML`): parsea `rfegolf.es/club/{slug}` (solo necesita el slug):
   1. Cada tee es un `<option value="rcpanel_{post}_{recorrido}_{n}">CLUB - Recorrido - TEE (M|F)</option>`
   2. Su tarjeta está en el panel `id="rcpanel_…"`: Par y Metros = última celda de su fila; `Vc: X` / `Vs: Y` en `.holes-table-footer`
-- Si el slug da 404 (favoritos guardados con slugs antiguos tipo `forus_golf_las_rejas`), se resuelve buscando el slug en la API de WordPress.
+- Si el slug da 404 (favoritos guardados con slugs antiguos tipo `forus_golf_las_rejas`), se resuelve buscando el slug con el mismo buscador.
 - **PDF público** (`fetchPDF`): `api.rfeg.es/files/summaryhandicap/{licencia}.pdf` ya sirve sin token; el token solo se envía si todavía aparece. Reintenta hasta 5 veces porque el servidor da HTTP 500 aleatorios.
 
 ### Autenticación RFEG

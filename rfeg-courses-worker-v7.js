@@ -229,17 +229,31 @@ async function searchClubs(query, env) {
   return results;
 }
 
+// The WP REST API (/wp-json/) was shut down (Oct 2026), so we parse the site's
+// own HTML search restricted to clubs. Each hit looks like:
+//   <h2 class="entry-title"><a href="https://rfegolf.es/club/{slug}">Name</a></h2>
+// The results page carries no numeric post id; the slug doubles as id (the
+// frontend only needs a non-empty club_id, and the club page only needs the slug).
 async function searchViaWordPress(query) {
-  const url = `${RFEG_WEB}/wp-json/wp/v2/club?search=${encodeURIComponent(query)}&per_page=20&_fields=id,slug,yoast_head_json.title`;
-  const resp = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "application/json" } });
+  const url = `${RFEG_WEB}/?s=${encodeURIComponent(query)}&post_type=club`;
+  const resp = await fetch(url, { headers: { "User-Agent": BROWSER_UA, "Accept": "text/html,application/xhtml+xml" } });
   if (!resp.ok) throw new Error(`RFEG search error: ${resp.status}`);
-  const body = await resp.json();
-  return (Array.isArray(body) ? body : []).map(c => ({
-    id: c.id,
-    name: decodeEntities((c.yoast_head_json?.title || c.slug).replace(/\s*(&#8211;|–|-)\s*RFEG\s*$/i, "")),
-    slug: c.slug,
-    city: "", community: "", holes: 0,
-  }));
+  const html = await resp.text();
+  const re = /<h2 class="entry-title"><a href="https:\/\/rfegolf\.es\/club\/([^"\/]+)\/?">([\s\S]*?)<\/a><\/h2>/g;
+  const seen = new Set();
+  const results = [];
+  for (const m of html.matchAll(re)) {
+    const slug = m[1];
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+    results.push({
+      id: slug,
+      name: decodeEntities(m[2].replace(/<[^>]+>/g, "").trim()),
+      slug,
+      city: "", community: "", holes: 0,
+    });
+  }
+  return results;
 }
 
 function decodeEntities(s) {
@@ -314,7 +328,7 @@ function parseClubHTML(html, clubId, slug) {
       meters: rowTotal(section, "Metros"),
     });
   }
-  return { club, club_id: parseInt(clubId), slug, total_tees: tees.length, tees, source: "rfegolf.es", scraped_at: new Date().toISOString() };
+  return { club, club_id: /^\d+$/.test(clubId) ? parseInt(clubId) : clubId, slug, total_tees: tees.length, tees, source: "rfegolf.es", scraped_at: new Date().toISOString() };
 }
 
 // Last <td> of the scorecard row labelled `label` (the TOTAL column).
