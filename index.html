@@ -780,8 +780,8 @@ function CourseSearch(p){
       sLoading(true);
       fetchT(COURSES_API+"/?search="+encodeURIComponent(val),null,12000)
         .then(function(r){return r.json()})
-        .then(function(d){sRes(d.results||[]);sLoading(false)})
-        .catch(function(e){sErr("Error buscando");sLoading(false)})
+        .then(function(d){if(d.error)throw new Error(d.error);sRes(d.results||[]);sLoading(false)})
+        .catch(function(e){sErr("No se pudo buscar en la RFEG. Puedes introducir los datos manualmente abajo.");sLoading(false)})
     },400);
   };
 
@@ -790,6 +790,7 @@ function CourseSearch(p){
     fetchT(COURSES_API+"/?club_id="+c.id+"&slug="+c.slug,null,12000)
       .then(function(r){return r.json()})
       .then(function(d){
+        if(d.error)throw new Error(d.error);
         if(d.tees&&d.tees.length>0){sTees(d.tees.map(function(t){return Object.assign({},t,{recorrido:decU(t.recorrido),tee:decU(t.tee)})}))}
         else{sErr("Sin datos de recorridos")}
         sLoading(false)
