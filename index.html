@@ -55,6 +55,27 @@ function fetchT(url,opts,ms){
   });
 }
 
+// Busqueda publica de federados de api.rfegolf.es: sin login y con CORS abierto, asi que se llama
+// directamente (no pasa por workers.dev). Devuelve id (federatedId), nombre y handicap {value,status,
+// category,updatedAt}. No esta documentada: si la RFEG la cierra, devuelve null y la app funciona
+// como antes (solo se pierden el ID automatico y el HI de respaldo sin login).
+var RFEG_PUBLIC_SEARCH="https://api.rfegolf.es/public/federated?search=";
+async function lookupPublicFederated(lic){
+  try{
+    var r=await fetchT(RFEG_PUBLIC_SEARCH+encodeURIComponent(lic),{credentials:"omit"},8000);
+    if(!r.ok)return null;
+    var list=await r.json();if(!Array.isArray(list))return null;
+    var L=String(lic).trim().toUpperCase();
+    var exact=list.find(function(x){return String(x.license||"").toUpperCase()===L});
+    if(exact)return exact;
+    // La app guarda licencias cortas (503218) y la RFEG las devuelve completas (1102503218).
+    // La busqueda es por coincidencia parcial, asi que solo vale un unico resultado que TERMINE en esos digitos.
+    var ends=list.filter(function(x){return String(x.license||"").toUpperCase().endsWith(L)});
+    return ends.length===1?ends[0]:null;
+  }catch(e){return null}
+}
+function publicFullName(pf){return pf?[pf.lastName,pf.secondLastName].filter(Boolean).join(" ")+(pf.name?", "+pf.name:""):""}
+
 
 // Known federated ID mappings (bootstrapped, user can add more; user-added persist in localStorage)
 var BOOT_FED_IDS={"503218":"26291","995317":"330075","924203":"328208"};
@@ -290,6 +311,16 @@ async function fetchParse(lic,onM){
   var creds=window._rfegCreds||null;
   var fedId=window._rfegFedIds&&window._rfegFedIds[lic];
 
+  // Busqueda publica en paralelo con el PDF (no lo retrasa). Si encuentra el federatedId y la licencia
+  // no estaba asociada, se guarda en el mapa: ya no hace falta meter "licencia:id" a mano.
+  var pubP=lookupPublicFederated(lic);
+  pubP.then(function(pf){
+    if(pf&&pf.id&&!(window._rfegFedIds&&window._rfegFedIds[lic])){
+      if(!window._rfegFedIds)window._rfegFedIds={};
+      window._rfegFedIds[lic]=String(pf.id);saveFedIds();
+    }
+  });
+
   // Intento 1: PDF via api.rfeg.es (public, works for any license)
   onM("Conectando con la RFEG...");
   try{
@@ -297,6 +328,12 @@ async function fetchParse(lic,onM){
     if(r1.ok){var b1=await r1.blob();if(await isPdfBlob(b1)){blob=b1}else{errLog.push("PDF publico: no PDF ("+b1.size+"b)")}}
     else{errLog.push("PDF publico: HTTP "+r1.status)}
   }catch(e1){errLog.push("PDF publico: "+e1.message)}
+
+  // Sin ID asociado pero con sesion: los intentos 2-4 lo necesitan, asi que esperamos a la busqueda publica
+  if(!blob&&creds&&!fedId){
+    var pf0=await pubP;
+    if(pf0&&pf0.id)fedId=String(pf0.id);
+  }
 
   // Intento 2: PDF via api.rfegolf.es (authenticated, own+linked only)
   if(!blob&&creds&&fedId){
@@ -349,7 +386,7 @@ async function fetchParse(lic,onM){
     // Build a minimal data object with HI but no rounds
     var prof=loadProfiles().find(function(p){return p.license===lic});
     return{
-      name:prof?prof.name:"Jugador",
+      name:prof?prof.name:(publicFullName(await pubP)||"Jugador"),
       hi:hiOnly.value,
       rounds:[],
       scores:scores,
@@ -358,8 +395,32 @@ async function fetchParse(lic,onM){
       hiCategory:hiOnly.category,
       hiDate:hiOnly.updatedAt,
       limitedData:true,
+      fedId:fedId,
       errLog:errLog
     };
+  }
+
+  // Intento 5: HI de la busqueda publica (sin login). Solo si no hay cache con rondas: en ese caso
+  // es mejor que consult() muestre la cache completa marcada como desactualizada.
+  var cachedD=loadDataCache(lic);
+  if(!(cachedD&&cachedD.rounds&&cachedD.rounds.length)){
+    var pf1=await pubP;
+    if(pf1&&pf1.handicap&&pf1.handicap.value!=null){
+      var prof1=loadProfiles().find(function(p){return p.license===lic});
+      return{
+        name:prof1?prof1.name:publicFullName(pf1),
+        hi:pf1.handicap.value,
+        rounds:[],
+        scores:scores,
+        source:"public",
+        hiStatus:pf1.handicap.status,
+        hiCategory:pf1.handicap.category,
+        hiDate:pf1.handicap.updatedAt,
+        limitedData:true,
+        fedId:fedId||String(pf1.id),
+        errLog:errLog
+      };
+    }
   }
 
   throw new Error("No se pudo obtener datos.\n"+errLog.join(" | ")+"\n\nPara obtener datos completos, inicia sesion con tus credenciales de rfegolf.es (boton en la pantalla principal).");
@@ -1232,13 +1293,13 @@ function App(){
 
       {data.limitedData?<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"10px"}}><span style={{fontSize:"18px"}}>{"⚠️"}</span><h2 style={{margin:0,fontSize:"15px",color:C.white,fontWeight:"600"}}>Datos limitados</h2></div>
         <div style={{fontSize:"12px",color:C.dim,lineHeight:1.6,marginBottom:"10px"}}>
-          {data.errLog&&data.errLog.length>0?<div style={{marginBottom:"8px"}}>No se pudo descargar el PDF completo de la RFEG. Mostramos el handicap actual obtenido de la API.</div>:null}
+          {data.errLog&&data.errLog.length>0?<div style={{marginBottom:"8px"}}>No se pudo descargar el PDF completo de la RFEG. Mostramos el handicap actual obtenido de la API{data.source==="public"?" (consulta publica, sin sesion)":""}.</div>:null}
           <div>Para ver tus rondas, diferenciales, simulador y estadisticas por campo, necesitas:</div>
         </div>
         <div style={{fontSize:"12px",color:C.dim,lineHeight:1.8}}>
           <div><span style={{color:C.gold}}>1.</span> <span style={{color:C.white}}>Iniciar sesion</span> con tus credenciales de rfegolf.es</div>
-          <div><span style={{color:C.gold}}>2.</span> <span style={{color:C.white}}>Asociar tu licencia</span> con tu ID de federado (puedes verlo en tu perfil de rfegolf.es)</div>
-          <div><span style={{color:C.gold}}>3.</span> Solo podras ver datos completos de <span style={{color:C.white}}>tu cuenta y jugadores vinculados</span></div>
+          {!data.fedId?<div><span style={{color:C.gold}}>2.</span> <span style={{color:C.white}}>Asociar tu licencia</span> con tu ID de federado (puedes verlo en tu perfil de rfegolf.es)</div>:null}
+          <div><span style={{color:C.gold}}>{data.fedId?"2.":"3."}</span> Solo podras ver datos completos de <span style={{color:C.white}}>tu cuenta y jugadores vinculados</span></div>
         </div>
         <button onClick={function(){setShowLogin(true)}} style={{marginTop:"14px",background:C.green,border:"none",borderRadius:"10px",color:C.white,padding:"12px",cursor:"pointer",fontSize:"13px",fontFamily:"'JetBrains Mono',monospace",width:"100%"}}>CONFIGURAR SESION RFEG</button>
         {data.scores&&data.scores.length>0?<div style={{marginTop:"14px"}}><div style={{fontSize:"10px",letterSpacing:"1.5px",color:C.gd,marginBottom:"8px"}}>HISTORIAL DE HANDICAP ({data.scores.length} REGISTROS)</div>{data.scores.slice(0,10).map(function(s,i){return<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.card,borderRadius:"6px",marginBottom:"3px",fontSize:"11px",fontFamily:"'JetBrains Mono',monospace"}}><span style={{color:C.dim}}>{s.date}</span><span style={{color:C.white,flex:1,marginLeft:"12px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.event}</span><span style={{color:C.gold,marginLeft:"8px",fontWeight:"600"}}>{s.handicap}</span></div>})}</div>:null}
