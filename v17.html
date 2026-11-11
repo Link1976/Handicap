@@ -415,6 +415,7 @@ function extractRFEGData(fullText, pages) {
       hcp_juego: r1.hcp_juego || 0,
       stb: r1.stb || 0,
       asc: r3.asc || r1.asc || 0,
+      rba: r3.rba || null,
       differential: diff,
     });
   }
@@ -626,6 +627,7 @@ function roundShareText(r,isUsed,rowLabel,playerName){
   var lines=[];
   lines.push("\u26F3 "+(r.course||r.tournament||"Ronda")+" \u2014 "+(r.date||""));
   if(playerName)lines.push(playerName);
+  if(r.rba)lines.push("Golpes (RBA): "+r.rba);
   lines.push("Diferencial: "+fmtH(r.differential)+(isUsed?" \u2B50 computa":""));
   lines.push("CR "+(r.cr||"\u2014")+" \u00B7 Slope "+(r.slope||"\u2014")+" \u00B7 Stableford "+(r.stb||"\u2014"));
   if(r.hcp_juego!=null)lines.push("HCP de juego: "+r.hcp_juego);
@@ -673,7 +675,8 @@ function RoundDetailModal(p){
         {metric("SLOPE",r.slope)}
         {metric("ASC",r.asc)}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px",marginBottom:"20px"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"8px",marginBottom:"20px"}}>
+        {metric("GOLPES (RBA)",r.rba)}
         {metric("STABLEFORD",r.stb)}
         {metric("HCP JUEGO",r.hcp_juego)}
       </div>
@@ -964,7 +967,8 @@ function Simulator(p){
   var _nine=useState(false),nine=_nine[0],sNine=_nine[1];
   var plan=useMemo(function(){return calcDefensePlan(p.rounds)},[p.rounds]);
   var onNineToggle=function(){var n=!nine;sNine(n);if(n){sMn("35");sMx("60")}else{sMn("70");sMx("105")}sRes([])};
-  var onCourseSelect=function(d){if(d){sCr(String(d.vc));sSl(String(d.slope));sSel(d.name)}else{sCr("");sSl("");sSel("")}};
+  var _par=useState(""),par=_par[0],sPar=_par[1];
+  var onCourseSelect=function(d){if(d){sCr(String(d.vc));sSl(String(d.slope));sPar(d.par!=null?String(d.par):"");sSel(d.name)}else{sCr("");sSl("");sPar("");sSel("")}};
   var run=function(){
     if(!cr||!sl)return;
     var ascVal=parseInt(asc)||0;
@@ -1001,7 +1005,7 @@ return(<Card style={{marginBottom:"20px"}}><div style={{display:"flex",alignItem
     </div>
     {nine&&p.hi==null?<div style={{background:"rgba(232,223,195,0.08)",border:"1px solid rgba(232,223,195,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.gold}}>Sin HI registrado: el diferencial esperado se calcula como 0</div>:null}
     <CourseSearch onSelect={onCourseSelect}/>
-    {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}</div>:null}
+    {sel?<div style={{background:"rgba(93,184,112,0.1)",border:"1px solid rgba(93,184,112,0.2)",borderRadius:"8px",padding:"8px 12px",marginBottom:"12px",fontSize:"11px",color:C.good}}>{"\u2714"} {sel}{par?<strong style={{marginLeft:"6px"}}>{"\u00B7 Par "+par}</strong>:null}</div>:null}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"10px",marginBottom:"10px"}}><div><label style={lbl()}>{nine?"CR 9H":"V. Campo"}</label><input value={cr} onChange={function(e){sCr(e.target.value)}} placeholder={nine?"35.5":"71.4"} style={inp()} type="number" step="0.1"/></div><div><label style={lbl()}>{nine?"Slope 9H":"Slope"}</label><input value={sl} onChange={function(e){sSl(e.target.value)}} placeholder="125" style={inp()} type="number"/></div><div><label style={lbl()}>ASC</label><input value={asc} onChange={function(e){sAsc(e.target.value)}} placeholder="0" style={inp()} type="number"/></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}><div><label style={lbl()}>Golpes min</label><input value={mn} onChange={function(e){sMn(e.target.value)}} style={inp()} type="number"/></div><div><label style={lbl()}>Golpes max</label><input value={mx} onChange={function(e){sMx(e.target.value)}} style={inp()} type="number"/></div></div>
     <button onClick={run} style={{background:C.green,border:"none",borderRadius:"10px",color:C.white,padding:"14px",cursor:"pointer",fontSize:"14px",fontFamily:"'JetBrains Mono',monospace",width:"100%"}}>SIMULAR</button>
