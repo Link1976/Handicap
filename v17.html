@@ -60,6 +60,10 @@ function fetchT(url,opts,ms){
 // category,updatedAt}. No esta documentada: si la RFEG la cierra, devuelve null y la app funciona
 // como antes (solo se pierden el ID automatico y el HI de respaldo sin login).
 var RFEG_PUBLIC_SEARCH="https://api.rfegolf.es/public/federated?search=";
+// PDF publico de handicap: tambien con CORS abierto, se pide directo y el worker queda de respaldo
+// Busqueda y tarjetas de campo salen de rfegolf.es, que a veces tarda ~40 s en responder
+var RFEG_SLOW_MS=45000;
+var RFEG_PDF_URL="https://api.rfeg.es/files/summaryhandicap/";
 async function lookupPublicFederated(lic){
   try{
     var r=await fetchT(RFEG_PUBLIC_SEARCH+encodeURIComponent(lic),{credentials:"omit"},8000);
@@ -321,13 +325,25 @@ async function fetchParse(lic,onM){
     }
   });
 
-  // Intento 1: PDF via api.rfeg.es (public, works for any license)
+  // Intento 1a: PDF directo de api.rfeg.es (publico, CORS abierto, no pasa por workers.dev).
+  // Ese servidor da HTTP 500 aleatorios, asi que se reintenta un par de veces.
   onM("Conectando con la RFEG...");
-  try{
-    var r1=await fetchT(COURSES_API+"/?pdf="+lic,{mode:"cors"});
-    if(r1.ok){var b1=await r1.blob();if(await isPdfBlob(b1)){blob=b1}else{errLog.push("PDF publico: no PDF ("+b1.size+"b)")}}
-    else{errLog.push("PDF publico: HTTP "+r1.status)}
-  }catch(e1){errLog.push("PDF publico: "+e1.message)}
+  for(var a1=0;a1<3&&!blob;a1++){
+    try{
+      var r1d=await fetchT(RFEG_PDF_URL+encodeURIComponent(lic)+".pdf",{credentials:"omit",cache:"no-store"},8000);
+      if(r1d.ok){var b1d=await r1d.blob();if(await isPdfBlob(b1d)){blob=b1d}else{errLog.push("PDF directo: no PDF ("+b1d.size+"b)")}}
+      else{errLog.push("PDF directo: HTTP "+r1d.status)}
+    }catch(e1d){errLog.push("PDF directo: "+e1d.message)}
+  }
+
+  // Intento 1b: el mismo PDF via el worker (por si la RFEG cierra el CORS)
+  if(!blob){
+    try{
+      var r1=await fetchT(COURSES_API+"/?pdf="+lic,{mode:"cors"});
+      if(r1.ok){var b1=await r1.blob();if(await isPdfBlob(b1)){blob=b1}else{errLog.push("PDF publico: no PDF ("+b1.size+"b)")}}
+      else{errLog.push("PDF publico: HTTP "+r1.status)}
+    }catch(e1){errLog.push("PDF publico: "+e1.message)}
+  }
 
   // Sin ID asociado pero con sesion: los intentos 2-4 lo necesitan, asi que esperamos a la busqueda publica
   if(!blob&&creds&&!fedId){
@@ -834,32 +850,38 @@ function CourseSearch(p){
   var _tees=useState(null),tees=_tees[0],sTees=_tees[1];
   var _club=useState(null),club=_club[0],sClub=_club[1];
   var _err=useState(""),err=_err[0],sErr=_err[1];
+  var _slow=useState(false),slow=_slow[0],sSlow=_slow[1];
   var timer=useRef(null);
+  var slowTimer=useRef(null);
+  // rfegolf.es a veces tarda ~40 s en servir una pagina: se espera mas y se avisa al usuario
+  var startLoad=function(){sLoading(true);sSlow(false);clearTimeout(slowTimer.current);slowTimer.current=setTimeout(function(){sSlow(true)},6000)};
+  var endLoad=function(){sLoading(false);sSlow(false);clearTimeout(slowTimer.current)};
+  useEffect(function(){return function(){clearTimeout(slowTimer.current);clearTimeout(timer.current)}},[]);
 
   var doSearch=function(val){
     sQ(val);sRes([]);sErr("");
     if(val.length<2)return;
     clearTimeout(timer.current);
     timer.current=setTimeout(function(){
-      sLoading(true);
-      fetchT(COURSES_API+"/?search="+encodeURIComponent(val),null,12000)
+      startLoad();
+      fetchT(COURSES_API+"/?search="+encodeURIComponent(val),null,RFEG_SLOW_MS)
         .then(function(r){return r.json()})
-        .then(function(d){if(d.error)throw new Error(d.error);sRes(d.results||[]);sLoading(false)})
-        .catch(function(e){sErr("No se pudo buscar en la RFEG. Puedes introducir los datos manualmente abajo.");sLoading(false)})
+        .then(function(d){if(d.error)throw new Error(d.error);sRes(d.results||[]);endLoad()})
+        .catch(function(e){sErr("No se pudo buscar en la RFEG. Puedes introducir los datos manualmente abajo.");endLoad()})
     },400);
   };
 
   var selectClub=function(c){
-    sClub(c);sRes([]);sQ(c.name);sLoading(true);sErr("");
-    fetchT(COURSES_API+"/?club_id="+c.id+"&slug="+c.slug,null,12000)
+    sClub(c);sRes([]);sQ(c.name);startLoad();sErr("");
+    fetchT(COURSES_API+"/?club_id="+c.id+"&slug="+c.slug,null,RFEG_SLOW_MS)
       .then(function(r){return r.json()})
       .then(function(d){
         if(d.error)throw new Error(d.error);
         if(d.tees&&d.tees.length>0){sTees(d.tees.map(function(t){return Object.assign({},t,{recorrido:decU(t.recorrido),tee:decU(t.tee)})}))}
         else{sErr("Sin datos de recorridos")}
-        sLoading(false)
+        endLoad()
       })
-      .catch(function(e){sErr("Error cargando campo");sLoading(false)})
+      .catch(function(e){sErr("La RFEG no ha respondido al cargar el campo. Prueba de nuevo o introduce los datos manualmente abajo.");endLoad()})
   };
 
   var selectTee=function(t){
@@ -873,18 +895,19 @@ function CourseSearch(p){
   var useFav=function(f){
     sQ("");sErr("");
     if(!f.clubId||!f.slug){addFavCourse(f);if(p.onSelect)p.onSelect(f);return}
-    sLoading(true);
-    fetchT(COURSES_API+"/?club_id="+f.clubId+"&slug="+f.slug,null,12000)
+    // El favorito ya trae su rating guardado: no merece esperar tanto como una carga nueva
+    startLoad();
+    fetchT(COURSES_API+"/?club_id="+f.clubId+"&slug="+f.slug,null,20000)
       .then(function(r){return r.json()})
       .then(function(d){
-        sLoading(false);
+        endLoad();
         var fresh=(d.tees||[]).map(function(t){return Object.assign({},t,{recorrido:decU(t.recorrido),tee:decU(t.tee)})})
           .find(function(t){return t.recorrido===f.recorrido&&t.tee===f.tee&&t.gender===f.gender});
         var sel=fresh?{vc:fresh.vc,slope:fresh.vs,par:fresh.par,name:f.name,clubId:f.clubId,slug:f.slug,recorrido:f.recorrido,tee:f.tee,gender:f.gender}:f;
         addFavCourse(sel);
         if(p.onSelect)p.onSelect(sel);
       })
-      .catch(function(){sLoading(false);addFavCourse(f);if(p.onSelect)p.onSelect(f)});
+      .catch(function(){endLoad();addFavCourse(f);if(p.onSelect)p.onSelect(f)});
   };
 
   var reset=function(){sQ("");sRes([]);sTees(null);sClub(null);sErr("");if(p.onSelect)p.onSelect(null)};
@@ -926,7 +949,7 @@ function CourseSearch(p){
     <input value={q} onChange={function(e){doSearch(e.target.value)}} placeholder="Escribe nombre del campo..." style={Object.assign({},inp(),{marginBottom:"6px"})} type="text" autoComplete="off"/>
     {favs.length>0?<div style={{marginBottom:"6px"}}><div style={{fontSize:"10px",letterSpacing:"1.5px",color:C.gd,margin:"4px 0 6px",fontFamily:"'JetBrains Mono',monospace"}}>RECIENTES</div><div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>{favs.map(function(f,i){
       return<button key={i} onClick={function(){useFav(f)}} style={{background:"rgba(232,223,195,0.08)",border:"1px solid rgba(232,223,195,0.2)",borderRadius:"14px",color:C.white,padding:"6px 12px",cursor:"pointer",fontSize:"11px",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}{f.ts?<span style={{color:C.dim,marginLeft:"6px"}}>{"· "+favAgeLabel(f.ts)}</span>:null}</button>})}</div></div>:null}
-    {loading?<div style={{fontSize:"11px",color:C.dim,padding:"8px",textAlign:"center"}}>Buscando...</div>:null}
+    {loading?<div style={{fontSize:"11px",color:C.dim,padding:"8px",textAlign:"center"}}>{slow?"La RFEG va lenta, puede tardar hasta un minuto...":"Buscando..."}</div>:null}
     {err?<div style={{fontSize:"11px",color:C.bad,padding:"4px"}}>{err}</div>:null}
     {res.length>0?<div style={{maxHeight:"180px",overflowY:"auto"}}>{res.map(function(c,i){
       return<div key={c.id} onClick={function(){selectClub(c)}} style={{padding:"10px 12px",borderRadius:"8px",cursor:"pointer",marginBottom:"3px",border:"1px solid transparent",transition:"all 0.15s"}} onMouseOver={function(e){e.currentTarget.style.background="rgba(232,223,195,0.08)";e.currentTarget.style.borderColor="rgba(232,223,195,0.2)"}} onMouseOut={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent"}}>

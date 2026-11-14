@@ -65,7 +65,7 @@ Wrapper de `fetch` con `AbortController`: timeout de 15 s (12 s en el buscador d
 
 Cascada de 4 intentos para obtener datos del jugador:
 
-1. **PDF público** `GET /?pdf=licencia` — cualquier licencia, sin login
+1. **PDF público** — cualquier licencia, sin login. Se pide directo a `api.rfeg.es/files/summaryhandicap/{lic}.pdf` (CORS abierto, 3 intentos) y, si falla, vía worker `GET /?pdf=licencia`
 2. **PDF autenticado** `POST /?auth_pdf=fedId` — requiere login, solo propio + vinculados
 3. **HI actual** `POST /?auth_handicap=fedId` — requiere login, funciona para cualquier federado (datos limitados, sin rondas)
 4. **Scores history** `POST /?auth_scores=fedId` — requiere login, solo propio + vinculados
@@ -182,9 +182,9 @@ Los endpoints POST esperan body JSON `{username, password}`.
 | Tipo | TTL | Estado |
 |------|-----|--------|
 | Búsqueda de clubs (`wpsearch_<query>`) | 7 días | Activo |
-| Tees de campo | — | Deshabilitado — scraping en tiempo real |
+| Tees de campo (`tees_<slug>`) | 24 h | Activo — nunca se cachea un resultado vacío |
 
-El cache de tees se deshabilitó porque la RFEG actualiza CR/Slope sin aviso y el cache de 30 días mostraba valores obsoletos.
+El cache de tees con 30 días mostraba CR/Slope obsoletos (la RFEG los cambia sin aviso); se reactivó con 24 h porque rfegolf.es llega a tardar ~40 s por página. Por lo mismo, el frontend espera hasta 45 s (`RFEG_SLOW_MS`) en búsqueda y carga de campo, con aviso de lentitud a los 6 s. `fetchPDF` ya no busca el token `coded_…` (costaba ~40 s por PDF).
 
 ### Fuente de datos: rfegolf.es (WordPress)
 

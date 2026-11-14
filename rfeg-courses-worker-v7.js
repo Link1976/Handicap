@@ -15,6 +15,7 @@
 const RFEG_WEB = "https://rfegolf.es";
 const RFEGOLF_API = "https://api.rfegolf.es";
 const SEARCH_CACHE_TTL = 7 * 24 * 3600;
+const TEES_CACHE_TTL = 24 * 3600;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -267,8 +268,19 @@ function decodeEntities(s) {
 // ─── Club Course Data ───────────────────────────────────────────────────────
 
 async function getClubCourses(clubId, slug, env) {
-  // Cache disabled: always scrape live to ensure CR/Slope are up to date
-  return await scrapeClubPage(clubId, slug);
+  // Short cache (TEES_CACHE_TTL): rfegolf.es pages can take ~40 s to load, and
+  // the RFEG changes CR/Slope without notice, so a long cache (30 days) showed
+  // stale ratings. Empty results are never cached.
+  const cacheKey = `tees_${slug.toLowerCase()}`;
+  if (env?.RFEG_CACHE) {
+    const cached = await env.RFEG_CACHE.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  }
+  const data = await scrapeClubPage(clubId, slug);
+  if (env?.RFEG_CACHE && data.tees.length > 0) {
+    await env.RFEG_CACHE.put(cacheKey, JSON.stringify(data), { expirationTtl: TEES_CACHE_TTL });
+  }
+  return data;
 }
 
 async function fetchClubHTML(slug) {
@@ -348,9 +360,9 @@ async function fetchPDF(license) {
   const MAX_ATTEMPTS = 5;
   const RETRY_DELAY_MS = 400;
   // Since the 2026 WordPress migration rfegolf.es no longer embeds the coded_
-  // token, and the PDF endpoint serves without it. Send it only if found.
-  const token = await getFreshToken().catch(() => null);
-  const auth = token ? { "Authorization": token } : {};
+  // token and the PDF endpoint serves without it. Do not look for it: fetching
+  // the rfegolf.es home page can take ~40 s and made every PDF time out.
+  const auth = {};
   const pdfUrl = `https://api.rfeg.es/files/summaryhandicap/${license}.pdf`;
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
